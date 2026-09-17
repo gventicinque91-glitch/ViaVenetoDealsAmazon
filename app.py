@@ -586,7 +586,20 @@ async def report_chat_id() -> str:
     if REPORT_CHAT_ID:
         return REPORT_CHAT_ID
     state = await runtime_store.load({})
-    return str(state.get("report_chat_id") or "")
+    stored = str(state.get("report_chat_id") or "")
+    if stored:
+        return stored
+    # On this service the MTProto user account is also the owner receiving the bot reports.
+    # Falling back to that account id makes the 20:00 report survive ephemeral filesystem restarts.
+    if user_client is not None:
+        try:
+            me = await user_client.get_me()
+            owner_id = str(getattr(me, "id", "") or "")
+            if owner_id:
+                return owner_id
+        except Exception as exc:
+            LOG.warning("Impossibile ricavare il chat report dall'account Telegram: %s", exc)
+    return ""
 
 
 async def send_report_to(chat_id: str, until: datetime | None = None):
