@@ -5,9 +5,9 @@ import httpx
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
-import app_v3
+import app_v4
 
-app = app_v3.base
+app = app_v4.base
 
 
 async def bot_call(method: str, payload: dict):
@@ -33,11 +33,11 @@ async def main():
         me = await client.get_me()
         print(f"TELEGRAM_USER=OK id={getattr(me, 'id', '?')}")
 
-        sources = await app_v3.find_source_chats()
+        sources = await app_v4.v3.find_source_chats()
         print("SOURCE_CHATS=OK " + " | ".join(name for name, _ in sources))
 
         now = datetime.now(app.ROME)
-        messages = await app_v3.day_messages(now)
+        messages = await app_v4.v3.day_messages(now)
         print(f"TODAY_MESSAGES=OK count={len(messages)}")
 
         state = await app.vv.get_state()
@@ -50,22 +50,22 @@ async def main():
 
         cache = await app.cache_store.load({})
         web_codes, web_sources = await asyncio.wait_for(
-            app_v3.web_identifiers(
+            app_v4.web_identifiers(
                 "B0D6ZJ276V",
                 "Dove Bagnoschiuma Dolce Nutrimento 6 Pezzi da 225 ml",
                 state,
                 cache,
             ),
-            timeout=180,
+            timeout=45,
         )
         print(f"WEB_GTIN_FALLBACK={'OK' if '8720181460043' in web_codes else 'NO_MATCH'} codes={web_codes} sources={web_sources[:3]}")
 
         bot = await bot_call("getMe", {})
         print(f"BOT=OK username=@{bot.get('username', '')}")
 
-        report = await asyncio.wait_for(app.build_report(now), timeout=360)
+        report = await asyncio.wait_for(app.build_report(now), timeout=180)
         print("REPORT_BUILD=OK")
-        for line in report.splitlines()[:18]:
+        for line in report.splitlines()[:22]:
             print(line)
 
         chat_id = str(getattr(me, "id", ""))
