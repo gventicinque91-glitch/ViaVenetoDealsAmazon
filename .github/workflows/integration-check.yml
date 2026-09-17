@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'app.py'
       - 'integration_check.py'
       - '.github/workflows/integration-check.yml'
   workflow_dispatch:
