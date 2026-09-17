@@ -1,0 +1,34 @@
+name: Live integration check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'integration_check.py'
+      - '.github/workflows/integration-check.yml'
+  workflow_dispatch:
+
+jobs:
+  live-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+      TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+      TELEGRAM_USER_SESSION: ${{ secrets.TELEGRAM_USER_SESSION }}
+      TELEGRAM_DEALS_BOT_TOKEN: ${{ secrets.TELEGRAM_DEALS_BOT_TOKEN }}
+      VIA_VENETO_PIN: ${{ secrets.VIA_VENETO_PIN }}
+      KEEPA_API_KEY: ${{ secrets.KEEPA_API_KEY }}
+      SOURCE_CHAT_TITLE: 'Caccia allo SCONTO 🎯'
+      STATE_DIR: './data-ci'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Compile
+        run: python -m py_compile app.py integration_check.py generate_session.py
+      - name: Run live integration test
+        run: python integration_check.py
