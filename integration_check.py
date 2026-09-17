@@ -40,6 +40,23 @@ async def main():
         messages = await app_v4.v3.day_messages(now)
         print(f"TODAY_MESSAGES=OK count={len(messages)}")
 
+        for message in messages:
+            urls = app_v4.v2.extract_urls(message)
+            if any("B0D6ZJ276V" in u.upper() for u in urls):
+                print("SAMPLE_MESSAGE_TEXT_BEGIN")
+                print(message.message or "")
+                print("SAMPLE_MESSAGE_TEXT_END")
+                print("SAMPLE_URLS=" + " | ".join(urls))
+                try:
+                    labels = []
+                    for row in message.buttons or []:
+                        for button in row:
+                            labels.append(f"{getattr(button, 'text', '')} => {getattr(button, 'url', '')}")
+                    print("SAMPLE_BUTTONS=" + " || ".join(labels))
+                except Exception as exc:
+                    print(f"SAMPLE_BUTTONS_ERROR={exc}")
+                break
+
         state = await app.vv.get_state()
         print(f"VIA_VENETO=OK revision={app.vv.revision} generation={app.vv.generation}")
 
