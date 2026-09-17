@@ -5,7 +5,9 @@ import httpx
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
-import app
+import app_v2
+
+app = app_v2.base
 
 
 async def bot_call(method: str, payload: dict):
@@ -31,28 +33,41 @@ async def main():
         me = await client.get_me()
         print(f"TELEGRAM_USER=OK id={getattr(me, 'id', '?')}")
 
-        source = await app.find_source_chat()
-        source_title = getattr(source, "title", None) or getattr(source, "username", None) or app.SOURCE_CHAT_TITLE
-        print(f"SOURCE_CHAT=OK title={source_title}")
+        sources = await app_v2.find_source_chats()
+        print("SOURCE_CHATS=OK " + " | ".join(name for name, _ in sources))
 
         now = datetime.now(app.ROME)
-        messages = await app.day_messages(now)
+        messages = await app_v2.day_messages(now)
         print(f"TODAY_MESSAGES=OK count={len(messages)}")
 
-        revision = await app.vv._request("/revision")
-        print(f"VIA_VENETO=OK revision={revision.get('revision')} generation={revision.get('generation')}")
+        state = await app.vv.get_state()
+        print(f"VIA_VENETO=OK revision={app.vv.revision} generation={app.vv.generation}")
+
+        exact = app.vv.lookup(state, "8720181460043")
+        if not exact:
+            raise RuntimeError("EAN di test 8720181460043 non trovato in Via Veneto")
+        print(f"TEST_EAN=OK description={exact.get('description', '')}")
+
+        cache = await app.cache_store.load({})
+        web_codes, web_sources = await asyncio.wait_for(
+            app_v2.web_identifiers(
+                "B0D6ZJ276V",
+                "Dove Bagnoschiuma Dolce Nutrimento 6 Pezzi da 225 ml",
+                state,
+                cache,
+            ),
+            timeout=150,
+        )
+        print(f"WEB_GTIN_FALLBACK={'OK' if '8720181460043' in web_codes else 'NO_MATCH'} codes={web_codes} sources={web_sources[:3]}")
 
         bot = await bot_call("getMe", {})
         print(f"BOT=OK username=@{bot.get('username', '')}")
 
-        report = await asyncio.wait_for(app.build_report(now), timeout=240)
+        report = await asyncio.wait_for(app.build_report(now), timeout=300)
         print("REPORT_BUILD=OK")
-        for line in report.splitlines()[:10]:
+        for line in report.splitlines()[:14]:
             print(line)
 
-        # Nelle chat private Telegram il chat_id coincide con l'ID dell'utente.
-        # L'invio riesce solo se l'utente ha gia' avviato il bot: e' quindi anche
-        # un test reale della destinazione del report.
         chat_id = str(getattr(me, "id", ""))
         if not chat_id:
             raise RuntimeError("Impossibile determinare il chat_id Telegram")
@@ -61,7 +76,7 @@ async def main():
             "sendMessage",
             {
                 "chat_id": chat_id,
-                "text": "✅ Via Veneto Deals: collegamenti Telegram e database verificati. Invio ora il report di test aggiornato.",
+                "text": "✅ Via Veneto Deals aggiornato: ora monitoro Caccia allo SCONTO + SCONTALO e uso anche il resolver web ASIN→EAN. Invio il report aggiornato.",
                 "disable_web_page_preview": True,
             },
         )
