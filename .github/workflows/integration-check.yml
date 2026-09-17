@@ -9,6 +9,7 @@ on:
       - 'app_v3.py'
       - 'app_v4.py'
       - 'app_v5.py'
+      - 'app_v6.py'
       - 'integration_check.py'
       - 'verified_aliases.json'
       - '.github/workflows/integration-check.yml'
@@ -35,6 +36,6 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Compile
-        run: python -m py_compile app.py app_v2.py app_v3.py app_v4.py app_v5.py integration_check.py generate_session.py
+        run: python -m py_compile app.py app_v2.py app_v3.py app_v4.py app_v5.py app_v6.py integration_check.py generate_session.py
       - name: Run live integration test
         run: python integration_check.py
