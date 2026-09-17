@@ -1,0 +1,4 @@
+APScheduler==3.10.4
+httpx==0.28.1
+python-telegram-bot==21.10
+Telethon==1.40.0
