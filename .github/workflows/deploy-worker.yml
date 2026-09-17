@@ -1,0 +1,90 @@
+name: Deploy Cloudflare bot worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'worker/**'
+      - 'wrangler.toml'
+      - '.github/workflows/deploy-worker.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      TELEGRAM_DEALS_BOT_TOKEN: ${{ secrets.TELEGRAM_DEALS_BOT_TOKEN }}
+      GITHUB_DISPATCH_TOKEN: ${{ secrets.GITHUB_DISPATCH_TOKEN }}
+      OWNER_CHAT_ID: ${{ secrets.TELEGRAM_OWNER_CHAT_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check deployment secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID TELEGRAM_DEALS_BOT_TOKEN GITHUB_DISPATCH_TOKEN; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is not configured"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then exit 1; fi
+
+      - name: Install Wrangler
+        run: npm install --global wrangler@4
+
+      - name: Deploy Worker
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler deploy 2>&1 | tee /tmp/wrangler-deploy.log
+          WORKER_URL=$(grep -Eo 'https://[^[:space:]]+\.workers\.dev' /tmp/wrangler-deploy.log | tail -1 || true)
+          if [ -z "$WORKER_URL" ]; then
+            echo "::error::Unable to determine workers.dev URL from Wrangler output"
+            exit 1
+          fi
+          echo "worker_url=$WORKER_URL" >> "$GITHUB_OUTPUT"
+          echo "Worker deployed: $WORKER_URL"
+
+      - name: Configure Worker secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          WEBHOOK_SECRET=$(openssl rand -hex 32)
+          printf '%s' "$TELEGRAM_DEALS_BOT_TOKEN" | wrangler secret put TELEGRAM_BOT_TOKEN
+          printf '%s' "$GITHUB_DISPATCH_TOKEN" | wrangler secret put GITHUB_DISPATCH_TOKEN
+          printf '%s' "$WEBHOOK_SECRET" | wrangler secret put TELEGRAM_WEBHOOK_SECRET
+          if [ -n "${OWNER_CHAT_ID:-}" ]; then
+            printf '%s' "$OWNER_CHAT_ID" | wrangler secret put OWNER_CHAT_ID
+          fi
+          echo "WEBHOOK_SECRET=$WEBHOOK_SECRET" >> "$GITHUB_ENV"
+
+      - name: Configure Telegram webhook
+        shell: bash
+        env:
+          WORKER_URL: ${{ steps.deploy.outputs.worker_url }}
+        run: |
+          set -euo pipefail
+          RESULT=$(curl --fail-with-body --silent --show-error \
+            -X POST "https://api.telegram.org/bot${TELEGRAM_DEALS_BOT_TOKEN}/setWebhook" \
+            -H 'content-type: application/json' \
+            --data "$(jq -nc --arg url "${WORKER_URL}/telegram" --arg secret "$WEBHOOK_SECRET" '{url:$url, secret_token:$secret, drop_pending_updates:false, allowed_updates:["message","edited_message"]}')")
+          echo "$RESULT" | jq -e '.ok == true' >/dev/null
+          echo "Telegram webhook configured at ${WORKER_URL}/telegram"
+
+      - name: Health check
+        env:
+          WORKER_URL: ${{ steps.deploy.outputs.worker_url }}
+        run: |
+          curl --fail --silent --show-error "${WORKER_URL}/health" | jq .
