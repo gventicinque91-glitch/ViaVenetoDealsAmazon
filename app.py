@@ -196,7 +196,7 @@ def extract_offer_price(text: str) -> float | None:
     candidates: list[tuple[float, int, str]] = []
     patterns = [
         re.compile(r"€\s*(\d{1,4}(?:[.,]\d{1,2})?)", re.I),
-        re.compile(r"(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:€|eur)\b?", re.I),
+        re.compile(r"(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:€|eur\b)", re.I),
     ]
     for pattern in patterns:
         for match in pattern.finditer(text or ""):
@@ -208,7 +208,6 @@ def extract_offer_price(text: str) -> float | None:
                 continue
             lo, hi = max(0, match.start() - 28), min(len(text), match.end() + 28)
             context = text[lo:hi].lower()
-            # Non scambiare l'importo di un coupon/buono per il prezzo del prodotto.
             if any(word in context for word in ("coupon da", "buono da", "coupon di", "buono di")):
                 continue
             penalty = 0
@@ -219,7 +218,6 @@ def extract_offer_price(text: str) -> float | None:
             candidates.append((value, penalty, context))
     if not candidates:
         return None
-    # Prima privilegia i candidati senza segnali da prezzo vecchio, poi il più basso.
     candidates.sort(key=lambda x: (x[1], x[0]))
     best_penalty = candidates[0][1]
     same_quality = [x for x in candidates if x[1] == best_penalty]
@@ -460,7 +458,6 @@ async def resolve_offer(message, amazon_url: str, state: dict[str, Any], cache: 
                 identifier_source = "alias verificato"
 
     if not match:
-        # Accettiamo un GTIN scritto nel post solo se trova davvero un prodotto Via Veneto.
         match = vv.first_match(state, text_gtins(text))
         if match:
             identifier_source = "GTIN nel messaggio"
