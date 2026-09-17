@@ -8,8 +8,8 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py app_v2.py generate_session.py aliases.example.json verified_aliases.json ./
+COPY app.py app_v2.py app_v3.py generate_session.py aliases.example.json verified_aliases.json ./
 
 RUN mkdir -p /app/data
 
-CMD ["python", "app_v2.py"]
+CMD ["python", "app_v3.py"]
