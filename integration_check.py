@@ -5,9 +5,9 @@ import httpx
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
-import app_v11
+import app_v12
 
-app = app_v11.base
+app = app_v12.base
 
 
 async def bot_call(method: str, payload: dict):
@@ -22,7 +22,7 @@ async def bot_call(method: str, payload: dict):
 
 def find_offer(messages, asin: str):
     for message in messages:
-        for url in app_v11.v2.extract_urls(message):
+        for url in app_v12.v2.extract_urls(message):
             canonical_asin = app.asin_from_url(url)
             if canonical_asin == asin or asin in url.upper():
                 return message, url
@@ -40,50 +40,39 @@ async def main():
         me = await client.get_me()
         print(f"TELEGRAM_USER=OK id={getattr(me, 'id', '?')}")
 
-        sources = await app_v11.v3.find_source_chats()
+        sources = await app_v12.v3.find_source_chats()
         print("SOURCE_CHATS=OK " + " | ".join(name for name, _ in sources))
         now = datetime.now(app.ROME)
-        messages = await app_v11.v3.day_messages(now)
+        messages = await app_v12.v3.day_messages(now)
         print(f"TODAY_MESSAGES=OK count={len(messages)}")
 
         state = await app.vv.get_state()
         print(f"VIA_VENETO=OK revision={app.vv.revision} generation={app.vv.generation}")
 
-        elmex_rows = []
-        for ean, product in (state.get("products") or {}).items():
-            desc = str((product or {}).get("description") or (product or {}).get("name") or "")
-            if "ELMEX" in desc.upper():
-                elmex_rows.append((str(ean), desc))
-        print(f"ELMEX_DB_COUNT={len(elmex_rows)}")
-        for ean, desc in elmex_rows[:30]:
-            print(f"ELMEX_DB ean={ean} description={desc}")
-
         aliases = app.load_aliases()
         cache = await app.cache_store.load({})
 
-        # Regression: explicit verified Dove mapping must still work.
         dove_message, dove_url = find_offer(messages, "B0D6ZJ276V")
         if not dove_message:
             raise RuntimeError("Offerta Dove di test non trovata")
-        dove = await app_v11.resolve_offer(dove_message, dove_url, state, cache, aliases)
+        dove = await app_v12.v11.resolve_offer(dove_message, dove_url, state, cache, aliases)
         if not dove or dove.get("status") != "matched" or dove.get("ean") != "8720181460043":
             raise RuntimeError(f"Regressione Dove: {dove}")
         print(f"DOVE_RESOLVE=OK ean={dove['ean']} total={dove['amazon_total']:.2f} unit={dove['amazon_unit']:.2f}")
 
-        # Real flow under test: full Telegram/Amazon title -> external unit EAN -> exact Via Veneto EAN.
         elmex_asin = "B0BZ58TBGD"
         elmex_message, elmex_url = find_offer(messages, elmex_asin)
         if not elmex_message:
             raise RuntimeError("Offerta Elmex B0BZ58TBGD non trovata oggi")
-        elmex_segment = app_v11.v5.offer_segment(elmex_message, elmex_url, elmex_asin)
-        elmex_hint = app_v11.v2.product_hint(elmex_segment)
+        elmex_segment = app_v12.v5.offer_segment(elmex_message, elmex_url, elmex_asin)
+        elmex_hint = app_v12.v2.product_hint(elmex_segment)
         print(f"ELMEX_SEGMENT={elmex_segment}")
         print(f"ELMEX_HINT={elmex_hint}")
-        print(f"ELMEX_CATALOG_QUERY={app_v11.v10.v8.catalog_query(elmex_hint)}")
-        print(f"ELMEX_UNIT_QUERY={app_v11.v10.v8.unit_query(elmex_hint)}")
+        print(f"ELMEX_CATALOG_QUERY={app_v12.v8.catalog_query(elmex_hint)}")
+        print(f"ELMEX_UNIT_QUERY={app_v12.v8.unit_query(elmex_hint)}")
 
         elmex = await asyncio.wait_for(
-            app_v11.resolve_offer(elmex_message, elmex_url, state, cache, aliases), timeout=180
+            app_v12.v11.resolve_offer(elmex_message, elmex_url, state, cache, aliases), timeout=180
         )
         print(f"ELMEX_RESOLVE={elmex}")
 
