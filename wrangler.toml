@@ -1,0 +1,12 @@
+name = "via-veneto-deals-bot"
+main = "worker/src/index.js"
+compatibility_date = "2026-09-17"
+workers_dev = true
+
+[vars]
+GITHUB_REPO = "gventicinque91-glitch/ViaVenetoDealsAmazon"
+REPORT_WORKFLOW = "report.yml"
+GITHUB_REF = "main"
+
+[triggers]
+crons = ["0 18 * * *", "0 19 * * *"]
