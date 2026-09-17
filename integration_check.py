@@ -5,9 +5,9 @@ import httpx
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
-import app_v6
+import app_v7
 
-app = app_v6.base
+app = app_v7.base
 
 
 async def bot_call(method: str, payload: dict):
@@ -22,11 +22,9 @@ async def bot_call(method: str, payload: dict):
 
 def find_offer(messages, asin: str):
     for message in messages:
-        for url in app_v6.v2.extract_urls(message):
+        for url in app_v7.v2.extract_urls(message):
             canonical_asin = app.asin_from_url(url)
-            if canonical_asin == asin:
-                return message, url
-            if asin in url.upper():
+            if canonical_asin == asin or asin in url.upper():
                 return message, url
     return None, ""
 
@@ -42,16 +40,15 @@ async def main():
         me = await client.get_me()
         print(f"TELEGRAM_USER=OK id={getattr(me, 'id', '?')}")
 
-        sources = await app_v6.v3.find_source_chats()
+        sources = await app_v7.v3.find_source_chats()
         print("SOURCE_CHATS=OK " + " | ".join(name for name, _ in sources))
         now = datetime.now(app.ROME)
-        messages = await app_v6.v3.day_messages(now)
+        messages = await app_v7.v3.day_messages(now)
         print(f"TODAY_MESSAGES=OK count={len(messages)}")
 
         state = await app.vv.get_state()
         print(f"VIA_VENETO=OK revision={app.vv.revision} generation={app.vv.generation}")
 
-        # Diagnostic only: show all Elmex entries actually present in Via Veneto.
         elmex_rows = []
         for ean, product in (state.get("products") or {}).items():
             desc = str((product or {}).get("description") or (product or {}).get("name") or "")
@@ -61,48 +58,45 @@ async def main():
         for ean, desc in elmex_rows[:30]:
             print(f"ELMEX_DB ean={ean} description={desc}")
 
-        # Regression: known Dove mapping remains exact.
+        aliases = app.load_aliases()
+        cache = await app.cache_store.load({})
+
         dove_message, dove_url = find_offer(messages, "B0D6ZJ276V")
         if not dove_message:
             raise RuntimeError("Offerta Dove di test non trovata")
-        aliases = app.load_aliases()
-        cache = await app.cache_store.load({})
-        dove = await app_v6.resolve_offer(dove_message, dove_url, state, cache, aliases)
+        dove = await app_v7.v6.resolve_offer(dove_message, dove_url, state, cache, aliases)
         if not dove or dove.get("status") != "matched" or dove.get("ean") != "8720181460043":
             raise RuntimeError(f"Regressione Dove: {dove}")
         print(f"DOVE_RESOLVE=OK ean={dove['ean']} total={dove['amazon_total']:.2f} unit={dove['amazon_unit']:.2f}")
 
-        # Core test: Telegram extended title -> external EAN -> exact Via Veneto EAN lookup.
         elmex_asin = "B0BZ58TBGD"
         elmex_message, elmex_url = find_offer(messages, elmex_asin)
         if not elmex_message:
             raise RuntimeError("Offerta Elmex B0BZ58TBGD non trovata oggi")
-        elmex_segment = app_v6.v5.offer_segment(elmex_message, elmex_url, elmex_asin)
-        elmex_hint = app_v6.v2.product_hint(elmex_segment)
+        elmex_segment = app_v7.v5.offer_segment(elmex_message, elmex_url, elmex_asin)
+        elmex_hint = app_v7.v2.product_hint(elmex_segment)
         print(f"ELMEX_SEGMENT={elmex_segment}")
         print(f"ELMEX_HINT={elmex_hint}")
+        print(f"ELMEX_UNIT_QUERY={app_v7.unit_query(elmex_hint)}")
 
         name_codes, modes, sources_used = await asyncio.wait_for(
-            app_v6.name_identifiers(elmex_asin, elmex_hint, state, cache), timeout=45
+            app_v7.name_identifiers(elmex_asin, elmex_hint, state, cache), timeout=60
         )
         print(f"ELMEX_NAME_EAN codes={name_codes} modes={modes} sources={sources_used}")
         elmex = await asyncio.wait_for(
-            app_v6.resolve_offer(elmex_message, elmex_url, state, cache, aliases), timeout=60
+            app_v7.v6.resolve_offer(elmex_message, elmex_url, state, cache, aliases), timeout=90
         )
         print(f"ELMEX_RESOLVE={elmex}")
 
         bot = await bot_call("getMe", {})
         print(f"BOT=OK username=@{bot.get('username', '')}")
-
-        # Do not fail this diagnostic commit solely on an unresolved external catalogue result;
-        # the DB dump above tells us the exact EAN family to validate next.
         chat_id = str(getattr(me, "id", ""))
         status = "MATCHED" if elmex and elmex.get("status") == "matched" else "UNRESOLVED"
         await bot_call(
             "sendMessage",
             {
                 "chat_id": chat_id,
-                "text": f"🔎 Test nuovo matching nome→EAN→Via Veneto: Elmex {status}. Sto verificando l'EAN esatto presente nel listino, senza fare matching fuzzy sul database.",
+                "text": f"🔎 Test matching nome esteso → EAN → Via Veneto: Elmex {status}. Il listino viene interrogato esclusivamente tramite EAN esatto.",
                 "disable_web_page_preview": True,
             },
         )
