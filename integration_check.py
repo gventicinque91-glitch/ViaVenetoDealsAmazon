@@ -67,6 +67,10 @@ async def main():
             raise RuntimeError("EAN di test 8720181460043 non trovato in Via Veneto")
         print(f"TEST_EAN=OK description={exact.get('description', '')}")
 
+        for elmex_ean in ("8718951528161", "8718951800472"):
+            elmex_item = app.vv.lookup(state, elmex_ean)
+            print(f"ELMEX_EAN_CANDIDATE code={elmex_ean} match={bool(elmex_item)} description={(elmex_item or {}).get('description', '')}")
+
         aliases = app.load_aliases()
         cache = await app.cache_store.load({})
         resolved = await app_v5.resolve_offer(sample_message, sample_url, state, cache, aliases)
