@@ -1,0 +1,71 @@
+name: Generate deals report
+
+on:
+  workflow_dispatch:
+    inputs:
+      chat_id:
+        description: Telegram chat id for manual reports
+        required: false
+        default: ''
+        type: string
+      status_message_id:
+        description: Telegram status message id to update
+        required: false
+        default: ''
+        type: string
+      cutoff:
+        description: ISO timestamp up to which messages are scanned
+        required: false
+        default: ''
+        type: string
+      origin:
+        description: manual or scheduled
+        required: false
+        default: manual
+        type: string
+
+concurrency:
+  group: via-veneto-deals-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+      TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+      TELEGRAM_USER_SESSION: ${{ secrets.TELEGRAM_USER_SESSION }}
+      TELEGRAM_DEALS_BOT_TOKEN: ${{ secrets.TELEGRAM_DEALS_BOT_TOKEN }}
+      VIA_VENETO_PIN: ${{ secrets.VIA_VENETO_PIN }}
+      KEEPA_API_KEY: ${{ secrets.KEEPA_API_KEY }}
+      SOURCE_CHAT_TITLES: 'Caccia allo SCONTO 🎯|SCONTALO'
+      STATE_DIR: './data-action'
+      REPORT_CHAT_ID: ${{ inputs.chat_id }}
+      STATUS_MESSAGE_ID: ${{ inputs.status_message_id }}
+      REPORT_CUTOFF: ${{ inputs.cutoff }}
+      REPORT_ORIGIN: ${{ inputs.origin }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Restore resolver cache
+        uses: actions/cache@v4
+        with:
+          path: data-action
+          key: via-veneto-deals-cache-${{ github.run_id }}
+          restore-keys: |
+            via-veneto-deals-cache-
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Validate Python
+        run: python -m py_compile app.py app_v2.py app_v3.py app_v4.py app_v5.py app_v6.py app_v7.py app_v8.py app_v9.py app_v10.py app_v11.py app_v12.py run_report_once.py
+
+      - name: Generate and send report
+        run: python run_report_once.py
