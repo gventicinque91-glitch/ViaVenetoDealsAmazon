@@ -2,6 +2,16 @@
   "B0D6ZJ276V": {
     "ean": "8720181460043",
     "units_per_pack": 6,
-    "note": "Dove Dolce Nutrimento 6x225 ml; unit GTIN verified against public product data"
+    "note": "Dove Dolce Nutrimento 6x225 ml; unit EAN verified against public product data"
+  },
+  "B0D6ZRW95B": {
+    "ean": "8720181462986",
+    "units_per_pack": 6,
+    "note": "Dove Fresca Idratazione 6x225 ml; unit EAN verified against Dove/Unilever campaign product table and independent retailer catalogues"
+  },
+  "B0D715M1MW": {
+    "ean": "8720181462917",
+    "units_per_pack": 6,
+    "note": "Dove Rilassante 6x225 ml; unit EAN verified against Dove/Unilever campaign product table"
   }
 }
