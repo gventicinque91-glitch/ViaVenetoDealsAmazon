@@ -3,6 +3,9 @@ import os
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+ROME = ZoneInfo("Europe/Rome")
 
 BOT_TOKEN = os.getenv("TELEGRAM_DEALS_BOT_TOKEN", "").strip()
 OWNER_CHAT_ID = (
@@ -76,9 +79,8 @@ def github_api(path: str, *, method: str = "GET", payload=None):
 
 
 def report_runs():
-    repo = GITHUB_REPOSITORY
     data = github_api(
-        f"/repos/{repo}/actions/workflows/{REPORT_WORKFLOW}/runs?per_page=10"
+        f"/repos/{GITHUB_REPOSITORY}/actions/workflows/{REPORT_WORKFLOW}/runs?per_page=10"
     )
     return list((data or {}).get("workflow_runs") or [])
 
@@ -106,12 +108,12 @@ def dispatch_report(chat_id: str, status_message_id: int):
     )
 
 
-def fmt_utc(value: str) -> str:
+def fmt_time(value: str) -> str:
     if not value:
         return "?"
     try:
         dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        return dt.astimezone().strftime("%d/%m %H:%M")
+        return dt.astimezone(ROME).strftime("%d/%m %H:%M")
     except Exception:
         return value
 
@@ -125,7 +127,7 @@ def handle_status(chat_id: str):
             chat_id,
             "🟡 REPORT IN CORSO\n"
             f"Stato: {label}\n"
-            f"Avvio: {fmt_utc(active.get('created_at', ''))}",
+            f"Avvio: {fmt_time(active.get('created_at', ''))}",
         )
         return
 
@@ -140,8 +142,8 @@ def handle_status(chat_id: str):
         ("✅" if ok else "❌")
         + f" Ultimo report {'completato' if ok else 'terminato con errore'}\n"
         + f"Conclusione: {last.get('conclusion') or 'sconosciuta'}\n"
-        + f"Avvio: {fmt_utc(last.get('created_at', ''))}\n"
-        + f"Fine: {fmt_utc(last.get('updated_at', ''))}",
+        + f"Avvio: {fmt_time(last.get('created_at', ''))}\n"
+        + f"Fine: {fmt_time(last.get('updated_at', ''))}",
     )
 
 
@@ -153,6 +155,11 @@ def handle_command(message: dict, dispatched_this_run: bool) -> bool:
         return dispatched_this_run
 
     command = text.split()[0].split("@")[0].lower()
+
+    if chat.get("type") != "private":
+        send_message(chat_id, "⛔ Questo bot accetta comandi solo in chat privata.")
+        return dispatched_this_run
+
     if OWNER_CHAT_ID and chat_id != OWNER_CHAT_ID:
         send_message(chat_id, "⛔ Questo bot è privato.")
         return dispatched_this_run
