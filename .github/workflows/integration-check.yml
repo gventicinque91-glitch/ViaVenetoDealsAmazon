@@ -21,6 +21,7 @@ on:
       - 'app_v15.py'
       - 'integration_check.py'
       - 'verified_aliases.json'
+      - 'verified_title_aliases.json'
       - '.github/workflows/integration-check.yml'
   workflow_dispatch:
 
