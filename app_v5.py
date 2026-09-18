@@ -1,6 +1,7 @@
 'use strict'
 
 import asyncio
+import re
 
 from telethon.helpers import add_surrogate, del_surrogate
 from telethon.tl.types import MessageEntityTextUrl
