@@ -12,13 +12,43 @@ v2 = v4.v2
 base = v4.base
 
 
-def offer_segment(message, amazon_url: str, asin: str) -> str:
-    """Return only the product line associated with this Telegram text-link URL.
+def _is_cta_line(value: str) -> bool:
+    low = (value or "").casefold()
+    return any(token in low for token in ("amazon", "apri", "guarda", "offerta", "vai al", "acquista"))
 
-    Telegram channels such as SCONTALO publish many products in one post and attach
-    each Amazon URL to the corresponding product text via MessageEntityTextUrl.
-    Entity offsets are UTF-16, so use Telethon surrogate helpers before slicing.
+
+def _context_block_around(text_surrogate: str, start: int, end: int) -> str:
+    """Return the product block around a Telegram text-link.
+
+    Many channels put the Amazon CTA on its own line. In that layout the old code
+    returned only "APRI SU AMAZON", losing product name and price. Prefer the
+    paragraph containing the CTA; if the post has no blank-line separators, include
+    a bounded number of preceding lines.
     """
+    para_start = text_surrogate.rfind("\n\n", 0, start)
+    para_start = para_start + 2 if para_start >= 0 else -1
+    para_end = text_surrogate.find("\n\n", end)
+    if para_end < 0:
+        para_end = len(text_surrogate)
+
+    if para_start < 0:
+        # Fall back to at most 8 preceding lines so a CTA-only anchor still carries
+        # product title, price and pack information without swallowing the whole post.
+        cursor = start
+        for _ in range(8):
+            prev = text_surrogate.rfind("\n", 0, cursor)
+            if prev < 0:
+                cursor = 0
+                break
+            cursor = prev
+        para_start = cursor + (1 if cursor > 0 else 0)
+
+    block = del_surrogate(text_surrogate[para_start:para_end]).strip()
+    return block
+
+
+def offer_segment(message, amazon_url: str, asin: str) -> str:
+    """Return the product block associated with this Telegram offer URL."""
     text = message.message or ""
     if not text:
         return ""
@@ -29,6 +59,7 @@ def offer_segment(message, amazon_url: str, asin: str) -> str:
             continue
         if entity.url != amazon_url:
             continue
+
         start = int(entity.offset)
         end = start + int(entity.length)
         line_start = surrogate.rfind("\n", 0, start) + 1
@@ -36,11 +67,21 @@ def offer_segment(message, amazon_url: str, asin: str) -> str:
         if line_end < 0:
             line_end = len(surrogate)
         line = del_surrogate(surrogate[line_start:line_end]).strip()
-        if line:
+
+        if line and not _is_cta_line(line):
             return line
 
-    # Fallback for posts that expose the URL in the visible text.
-    return v2.offer_context(text, asin, amazon_url)
+        block = _context_block_around(surrogate, start, end)
+        if block:
+            return block
+
+    # For inline URLs, use the legacy local context. For button-only affiliate links,
+    # the URL is not present in message text, so use the full post; category filtering
+    # and price parsing will still discard unrelated posts.
+    fallback = v2.offer_context(text, asin, amazon_url)
+    if fallback == text and amazon_url not in text:
+        return text
+    return fallback
 
 
 async def resolve_offer(message, amazon_url: str, state: dict, cache: dict, aliases: dict):
