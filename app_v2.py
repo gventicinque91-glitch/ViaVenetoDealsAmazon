@@ -9,6 +9,9 @@ from datetime import datetime, time
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+from telethon.helpers import add_surrogate, del_surrogate
+from telethon.tl.types import MessageEntityTextUrl
+
 import app as base
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -30,7 +33,7 @@ WEB_GTIN_FALLBACK = env("WEB_GTIN_FALLBACK", "true").lower() not in {"0", "false
 CATEGORY_KEYWORDS = (
     "detersiv", "lavatrice", "lavastoviglie", "ammorbidente", "smacchiatore", "igienizzante",
     "sgrassatore", "candeggina", "pulitore", "pavimenti", "wc", "detergente", "sapone",
-    "bagnoschiuma", "bagnodoccia", "docciaschiuma", "shampoo", "balsamo", "deodorante",
+    "bagnoschiuma", "bagno schiuma", "bagno crema", "bagnodoccia", "docciaschiuma", "gel doccia", "shower gel", "shampoo", "balsamo", "deodorante",
     "antitraspirante", "dentifricio", "collutorio", "spazzolino", "crema corpo", "crema mani",
     "rasoio", "rasatura", "depil", "assorbent", "igiene intima", "salviett", "pannolin",
     "micellare", "struccante", "gel doccia", "body wash", "shower gel", "cura persona",
@@ -48,6 +51,7 @@ SEARCH_HEADERS = {
 }
 
 _ORIGINAL_EXTRACT_URLS = base.extract_urls
+_ORIGINAL_CANONICAL_AMAZON_URL = base.canonical_amazon_url
 
 
 def relevant_offer(text: str) -> bool:
@@ -98,20 +102,103 @@ def product_hint(segment: str) -> str:
     return value[:220]
 
 
+def _entity_text(message, entity) -> str:
+    try:
+        text = add_surrogate(message.message or "")
+        start = int(entity.offset)
+        end = start + int(entity.length)
+        return del_surrogate(text[start:end]).strip()
+    except Exception:
+        return ""
+
+
+def _looks_like_offer_cta(label: str) -> bool:
+    low = (label or "").casefold()
+    if "amazon" in low:
+        return True
+    return any(token in low for token in ("apri", "guarda", "offerta", "vai al", "acquista"))
+
+
 def extract_urls(message) -> list[str]:
+    """Collect direct Amazon URLs plus affiliate/redirect links explicitly presented as offer CTAs.
+
+    Several deal channels hide the Amazon destination behind a Telegram text-link such as
+    "APRI SU AMAZON". The previous extractor discarded those URLs before they could be
+    resolved, which meant relevant products were never even classified.
+    """
     out = list(_ORIGINAL_EXTRACT_URLS(message))
+    text = message.message or ""
+    message_relevant = relevant_offer(text)
+
+    for entity in message.entities or []:
+        if not isinstance(entity, MessageEntityTextUrl) or not entity.url:
+            continue
+        try:
+            host = (urlparse(entity.url).hostname or "").lower()
+        except Exception:
+            host = ""
+        label = _entity_text(message, entity)
+        if (
+            base.AMAZON_HOST_RE.search(host)
+            or "amazon" in label.casefold()
+            or (message_relevant and _looks_like_offer_cta(label))
+        ):
+            if entity.url not in out:
+                out.append(entity.url)
+
     try:
         for row in message.buttons or []:
             for button in row:
                 url = getattr(button, "url", None)
                 if not url:
                     continue
-                host = (urlparse(url).hostname or "").lower()
-                if base.AMAZON_HOST_RE.search(host) and url not in out:
-                    out.append(url)
+                try:
+                    host = (urlparse(url).hostname or "").lower()
+                except Exception:
+                    host = ""
+                label = str(getattr(button, "text", "") or "")
+                if (
+                    base.AMAZON_HOST_RE.search(host)
+                    or "amazon" in label.casefold()
+                    or (message_relevant and _looks_like_offer_cta(label))
+                ):
+                    if url not in out:
+                        out.append(url)
     except Exception:
         pass
     return out
+
+
+async def canonical_amazon_url(url: str) -> str:
+    """Resolve direct, short and affiliate offer URLs to an Amazon product URL."""
+    try:
+        host = (urlparse(url).hostname or "").lower()
+    except Exception:
+        host = ""
+
+    if base.AMAZON_HOST_RE.search(host):
+        return await _ORIGINAL_CANONICAL_AMAZON_URL(url)
+
+    try:
+        response = await base.http.get(url, headers=SEARCH_HEADERS, timeout=12)
+        final_url = str(response.url)
+        final_host = (urlparse(final_url).hostname or "").lower()
+        if base.AMAZON_HOST_RE.search(final_host):
+            return await _ORIGINAL_CANONICAL_AMAZON_URL(final_url)
+
+        # Some affiliate gateways return an HTML interstitial instead of an HTTP redirect.
+        body = html_lib.unescape(response.text[:500000]).replace("\\/", "/")
+        for found in re.findall(r"https?://[^\\s\"'<>]+", body, flags=re.I):
+            try:
+                found_host = (urlparse(found).hostname or "").lower()
+            except Exception:
+                continue
+            if base.AMAZON_HOST_RE.search(found_host) and base.asin_from_url(found):
+                return await _ORIGINAL_CANONICAL_AMAZON_URL(found)
+    except Exception as exc:
+        base.LOG.debug("Affiliate Amazon URL non risolto %s: %s", url, exc)
+
+    return url
 
 
 async def find_source_chats() -> list[tuple[str, object]]:
@@ -409,6 +496,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Patchiamo il servizio esistente senza duplicarne scheduler, bot e logica Via Veneto.
 base.extract_urls = extract_urls
+base.canonical_amazon_url = canonical_amazon_url
 base.find_source_chat = find_source_chat
 base.day_messages = day_messages
 base.resolve_offer = resolve_offer
