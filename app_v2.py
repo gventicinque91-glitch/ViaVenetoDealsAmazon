@@ -20,7 +20,7 @@ def env(name: str, default: str = "") -> str:
 
 SOURCE_CHAT_TITLES = [
     x.strip()
-    for x in env("SOURCE_CHAT_TITLES", "Caccia allo SCONTO 🎯|SCONTALO").split("|")
+    for x in env("SOURCE_CHAT_TITLES", "Caccia allo SCONTO 🎯|SCONTALO|Coupons Italia|Offerte Flash|PROBABILI ERRORI|HomeZone").split("|")
     if x.strip()
 ]
 base.SOURCE_CHAT_TITLE = " + ".join(SOURCE_CHAT_TITLES)
