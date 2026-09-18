@@ -23,7 +23,7 @@ v3 = v14.v3
 v2 = v14.v2
 base = v14.base
 
-RESOLVER_VERSION = 9
+RESOLVER_VERSION = 10
 TITLE_ALIASES_FILE = Path("verified_title_aliases.json")
 
 
@@ -386,16 +386,16 @@ async def resolve_offer(message, amazon_url: str, state: dict, cache: dict, alia
     if not match:
         message_ids = base.text_gtins(segment)
         if message_ids:
-            external_ids = list(message_ids)
-            match = base.vv.first_match(state, external_ids)
+            external_ids = list(dict.fromkeys(external_ids + list(message_ids)))
+            match = base.vv.first_match(state, message_ids)
             if match:
                 identifier_source = "GTIN nel messaggio"
 
     if not match:
         identifiers, modes, sources = await name_identifiers(asin, hint, state, cache)
         if identifiers:
-            external_ids = list(identifiers)
-            match = base.vv.first_match(state, external_ids)
+            external_ids = list(dict.fromkeys(external_ids + list(identifiers)))
+            match = base.vv.first_match(state, identifiers)
             if match:
                 pack_mode = modes.get(match[0], "")
                 refreshed = cache.get(asin) if isinstance(cache.get(asin), dict) else {}
