@@ -47,6 +47,16 @@ def _context_block_around(text_surrogate: str, start: int, end: int) -> str:
 
     block_start = line_starts[-1]
     block = del_surrogate(text_surrogate[block_start:line_end]).strip()
+
+    # Remove generic channel promo/greeting lines before the actual product title.
+    # This keeps the extended product name clean for name→EAN resolution.
+    lines = block.splitlines()
+    first_relevant = next(
+        (idx for idx, value in enumerate(lines) if v2.relevant_offer(value)),
+        None,
+    )
+    if first_relevant is not None:
+        block = "\n".join(lines[first_relevant:]).strip()
     return block
 
 
