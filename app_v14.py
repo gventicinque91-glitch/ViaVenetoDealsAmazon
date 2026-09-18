@@ -270,7 +270,11 @@ async def name_identifiers(asin: str, hint: str, state: dict, cache: dict):
     # extended name/ASIN -> explicit EAN on an external product page -> exact DB EAN.
     if not accepted:
         for query, mode in plan:
-            codes, page_sources = await broad_page_evidence(query, state, asin=asin)
+            # Exact ASIN evidence describes the Amazon package. For a normalized
+            # single-unit query, search by name only so a package EAN cannot be
+            # mistaken for the unit EAN.
+            evidence_asin = "" if mode == "unit" else asin
+            codes, page_sources = await broad_page_evidence(query, state, asin=evidence_asin)
             if codes:
                 for code in codes:
                     if code not in accepted:
