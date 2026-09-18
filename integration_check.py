@@ -131,6 +131,46 @@ async def main():
         else:
             print("SOLE_TEST_SKIPPED message_not_found_today")
 
+        # Same ASIN can appear behind a wrong affiliate link/title pairing.
+        # Product identity must follow the extended title -> verified EAN, not ASIN.
+        dixan_message = next(
+            (
+                m for m in messages
+                if "dixan" in str(m.message or "").casefold()
+                and "discs" in str(m.message or "").casefold()
+                and "40" in str(m.message or "")
+            ),
+            None,
+        )
+        if dixan_message:
+            dixan_urls = app_v15.v2.extract_urls(dixan_message)
+            dixan_seen = False
+            for dixan_url in dixan_urls:
+                canonical = await app.canonical_amazon_url(dixan_url)
+                asin = app.asin_from_url(canonical)
+                segment = app_v15.v5.offer_segment(dixan_message, dixan_url, asin)
+                if "dixan" not in segment.casefold():
+                    continue
+                result = await app_v15.resolve_offer(
+                    dixan_message,
+                    dixan_url,
+                    state,
+                    await app.cache_store.load({}),
+                    app.load_aliases(),
+                )
+                print(f"DIXAN_RESOLVE={result}")
+                if result and result.get("status") == "matched" and result.get("ean") == "8015100579082":
+                    dixan_seen = True
+                    break
+                if result and result.get("status") == "not_in_db" and "8015100579082" in (result.get("eans") or []):
+                    dixan_seen = True
+                    break
+            if not dixan_seen:
+                raise RuntimeError("Dixan 40 pz non risolto a EAN verificato 8015100579082")
+            print("DIXAN_TITLE_EAN_OK")
+        else:
+            print("DIXAN_TEST_SKIPPED message_not_found_today")
+
         aliases = app.load_aliases()
         cache = await app.cache_store.load({})
 
