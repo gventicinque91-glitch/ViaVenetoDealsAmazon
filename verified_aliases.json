@@ -13,5 +13,20 @@
     "ean": "8720181462917",
     "units_per_pack": 6,
     "note": "Dove Rilassante 6x225 ml; unit EAN verified against Dove/Unilever campaign product table"
+  },
+  "B0077BQT32": {
+    "ean": "8008970005591",
+    "units_per_pack": 1,
+    "note": "Tesori d'Oriente Hammam Bagno Crema 500 ml; ASIN and EAN verified on public product catalogues"
+  },
+  "B0CP818C75": {
+    "ean": "8002910028763",
+    "units_per_pack": 3,
+    "note": "Sole Proteggi Colore 123 lavaggi = 3 x 41 lavaggi; Italian unit EAN verified against Sole/retailer catalogues"
+  },
+  "B082VQ86R9": {
+    "ean": "8718951385108",
+    "units_per_pack": 2,
+    "note": "Elmex Junior 6-12 anni 2x75 ml; Italian 75 ml unit EAN verified against Italian wholesale/retail catalogues"
   }
 }
