@@ -191,6 +191,7 @@ async def build_report(until: datetime | None = None) -> str:
 
         no_price = 0
         unresolved: dict[str, dict] = {}
+        not_in_db: dict[str, dict] = {}
         best_by_asin: dict[str, dict] = {}
         relevant = 0
         for result in results:
@@ -202,7 +203,12 @@ async def build_report(until: datetime | None = None) -> str:
                 no_price += 1
                 continue
             if result.get("status") == "unresolved":
-                unresolved[asin] = result
+                key = re.sub(r"\W+", " ", str(result.get("title") or asin).casefold()).strip() or asin
+                unresolved[key] = result
+                continue
+            if result.get("status") == "not_in_db":
+                key = re.sub(r"\W+", " ", str(result.get("title") or asin).casefold()).strip() or asin
+                not_in_db[key] = result
                 continue
             previous = best_by_asin.get(asin)
             if not previous or float(result["amazon_unit"]) < float(previous["amazon_unit"]):
@@ -222,7 +228,8 @@ async def build_report(until: datetime | None = None) -> str:
             f"Offerte detergenza/igiene analizzate: {relevant}",
             f"Prodotti Via Veneto riconosciuti: {len(matched)}",
             f"Amazon più conveniente: {len(deals)}",
-            f"Non identificati dopo ricerca EAN web: {len(unresolved)}",
+            f"EAN trovati ma assenti in Via Veneto: {len(not_in_db)}",
+            f"Ancora senza EAN verificato: {len(unresolved)}",
         ]
 
         if deals:
@@ -244,6 +251,14 @@ async def build_report(until: datetime | None = None) -> str:
                 ]
         else:
             lines += ["", "Nessuna offerta Amazon identificata con prezzo inferiore al riferimento Via Veneto."]
+
+        if not_in_db:
+            lines += ["", f"🔎 EAN identificato ma non presente in Via Veneto: {len(not_in_db)} prodotti."]
+            for item in list(not_in_db.values())[:5]:
+                eans = ", ".join(item.get("eans") or [])
+                lines.append(
+                    f"• {item.get('title') or item.get('asin')} · EAN {eans or 'n/d'} · ASIN {item.get('asin')}"
+                )
 
         if unresolved:
             lines += ["", f"❓ Ancora senza EAN verificato: {len(unresolved)} prodotti."]
