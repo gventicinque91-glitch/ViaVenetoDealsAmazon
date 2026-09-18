@@ -33,7 +33,7 @@ jobs:
       TELEGRAM_DEALS_BOT_TOKEN: ${{ secrets.TELEGRAM_DEALS_BOT_TOKEN }}
       VIA_VENETO_PIN: ${{ secrets.VIA_VENETO_PIN }}
       KEEPA_API_KEY: ${{ secrets.KEEPA_API_KEY }}
-      SOURCE_CHAT_TITLES: 'Caccia allo SCONTO 🎯|SCONTALO'
+      SOURCE_CHAT_TITLES: 'Caccia allo SCONTO 🎯|SCONTALO|Coupons Italia|Offerte Flash|PROBABILI ERRORI|HomeZone'
       STATE_DIR: './data-ci'
     steps:
       - uses: actions/checkout@v4
