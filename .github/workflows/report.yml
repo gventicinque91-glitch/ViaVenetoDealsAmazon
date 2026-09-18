@@ -18,6 +18,11 @@ on:
         required: false
         default: ''
         type: string
+      requested_at:
+        description: ISO timestamp when the Telegram command was received
+        required: false
+        default: ''
+        type: string
       origin:
         description: manual or scheduled
         required: false
@@ -44,6 +49,7 @@ jobs:
       REPORT_CHAT_ID: ${{ inputs.chat_id }}
       STATUS_MESSAGE_ID: ${{ inputs.status_message_id }}
       REPORT_CUTOFF: ${{ inputs.cutoff }}
+      REPORT_REQUESTED_AT: ${{ inputs.requested_at }}
       REPORT_ORIGIN: ${{ inputs.origin }}
 
     steps:
