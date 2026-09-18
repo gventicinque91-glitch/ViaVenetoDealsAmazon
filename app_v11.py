@@ -72,7 +72,9 @@ async def resolve_offer(message, amazon_url: str, state: dict, cache: dict, alia
         cached_name_ids = list(cached.get("name_identifiers") or [])
         cached_modes = dict(cached.get("name_identifier_modes") or {})
         cached_pack_units = dict(cached.get("name_pack_units") or {})
-        if cached_name_ids:
+        cached_query = str(cached.get("name_query") or "").strip().casefold()
+        current_query = str(v10.v8.catalog_query(hint) or "").strip().casefold()
+        if cached_name_ids and cached_query and cached_query == current_query:
             match = base.vv.first_match(state, cached_name_ids)
             if match:
                 pack_mode = cached_modes.get(match[0], "")
