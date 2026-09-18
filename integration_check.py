@@ -171,6 +171,56 @@ async def main():
         else:
             print("DIXAN_TEST_SKIPPED message_not_found_today")
 
+        async def assert_today_product(label, contains_terms, expected_eans):
+            message = next(
+                (
+                    m for m in messages
+                    if all(term in str(m.message or "").casefold() for term in contains_terms)
+                ),
+                None,
+            )
+            if not message:
+                print(f"{label}_TEST_SKIPPED message_not_found_today")
+                return
+            urls = app_v15.v2.extract_urls(message)
+            if not urls:
+                raise RuntimeError(f"{label}: nessun link Amazon/affiliate")
+            last = None
+            for url in urls:
+                canonical = await app.canonical_amazon_url(url)
+                asin = app.asin_from_url(canonical)
+                segment = app_v15.v5.offer_segment(message, url, asin)
+                if not all(term in segment.casefold() for term in contains_terms[:2]):
+                    continue
+                last = await app_v15.resolve_offer(
+                    message,
+                    url,
+                    state,
+                    await app.cache_store.load({}),
+                    app.load_aliases(),
+                )
+                print(f"{label}_RESOLVE={last}")
+                if last and last.get("status") == "matched" and last.get("ean") in expected_eans:
+                    print(f"{label}_MATCH_OK ean={last.get('ean')}")
+                    return
+                if last and last.get("status") == "not_in_db":
+                    found = set(last.get("eans") or [])
+                    if found.intersection(expected_eans):
+                        print(f"{label}_EAN_OK_NOT_IN_DB eans={sorted(found)}")
+                        return
+            raise RuntimeError(f"{label}: EAN atteso non risolto; ultimo={last}")
+
+        await assert_today_product(
+            "CHANTECLAIR",
+            ["chanteclair", "pulito profondo", "1575"],
+            {"8015194533236", "8015194533397"},
+        )
+        await assert_today_product(
+            "FABULOSO",
+            ["fabuloso", "cocco", "fiori bianchi"],
+            {"8718951419568"},
+        )
+
         aliases = app.load_aliases()
         cache = await app.cache_store.load({})
 
