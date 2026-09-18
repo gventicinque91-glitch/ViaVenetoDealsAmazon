@@ -33,6 +33,7 @@ def catalog_query(hint: str) -> str:
 
 def unit_query(hint: str) -> str:
     value = catalog_query(hint)
+    value = re.sub(r"^\s*\d{1,2}\s*[x×]\s+(?=[A-Za-zÀ-ÿ])", "", value, flags=re.I)
     value = re.sub(
         r"\b\d{1,2}\s*[x×]\s*(\d+(?:[.,]\d+)?\s*(?:ml|cl|l|g|kg))\b",
         r"\1",
