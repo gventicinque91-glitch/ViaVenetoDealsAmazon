@@ -40,6 +40,7 @@ CATEGORY_KEYWORDS = (
 )
 
 PACK_PATTERNS = (
+    re.compile(r"^\s*(\d{1,2})\s*[x×]\s*(?=[A-Za-zÀ-ÿ])", re.I),
     re.compile(r"\b(\d{1,2})\s*(?:pezzi|pz|flaconi|bottiglie|confezioni)\s+da\b", re.I),
     re.compile(r"\bconfezione\s+da\s+(\d{1,2})\b", re.I),
     re.compile(r"\b(\d{1,2})\s*[x×]\s*\d", re.I),
@@ -95,9 +96,13 @@ def product_hint(segment: str) -> str:
     value = re.sub(r"\bB0[A-Z0-9]{8}\b", " ", value, flags=re.I)
     value = re.sub(r"[⭐✅❌🛒➡️ℹ️📌‼️🔥⚡]+", " ", value)
     value = re.sub(r"\s+", " ", value).strip()
-    for marker in (" invece di ", " a soli ", " venduto ", " recensioni", " €", " eur"):
+    for marker in (
+        " invece di ", " a soli ", " passa da ", " venduto ", " recensioni",
+        " minimo storico", " apri link amazon", " apri su amazon", " guarda offerta",
+        " #amazon", " €", " eur",
+    ):
         idx = value.casefold().find(marker)
-        if idx > 25:
+        if idx > 18:
             value = value[:idx]
     return value[:220]
 
