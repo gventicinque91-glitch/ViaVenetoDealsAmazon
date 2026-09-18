@@ -1,0 +1,40 @@
+name: Telegram bot listener
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bot_listener.py'
+      - '.github/workflows/bot-listener.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */4 * * *'
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: via-veneto-telegram-listener
+  cancel-in-progress: false
+
+jobs:
+  listen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    env:
+      TELEGRAM_DEALS_BOT_TOKEN: ${{ secrets.TELEGRAM_DEALS_BOT_TOKEN }}
+      TELEGRAM_OWNER_CHAT_ID: ${{ secrets.TELEGRAM_OWNER_CHAT_ID }}
+      TELEGRAM_REPORT_CHAT_ID: ${{ secrets.TELEGRAM_REPORT_CHAT_ID }}
+      GITHUB_TOKEN: ${{ github.token }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      GITHUB_REF_NAME: main
+      REPORT_WORKFLOW: report.yml
+      LISTENER_WORKFLOW: bot-listener.yml
+      LISTEN_SECONDS: '19200'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Listen for Telegram commands
+        run: python3 bot_listener.py
