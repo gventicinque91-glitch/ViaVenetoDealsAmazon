@@ -94,6 +94,43 @@ async def main():
         else:
             print("TESORI_TEST_SKIPPED message_not_found_today")
 
+        sole_message = next(
+            (
+                m for m in messages
+                if "sole detersivo lavatrice" in str(m.message or "").casefold()
+                and "proteggi colore" in str(m.message or "").casefold()
+                and "123" in str(m.message or "")
+            ),
+            None,
+        )
+        if sole_message:
+            sole_urls = app_v12.v2.extract_urls(sole_message)
+            print(f"SOLE_URL_CANDIDATES={sole_urls}")
+            if not sole_urls:
+                raise RuntimeError("Sole 123 lavaggi trovato ma nessun link Amazon/affiliate estratto")
+
+            sole_seen_relevant = False
+            sole_seen_asin = False
+            for sole_url in sole_urls:
+                canonical = await app.canonical_amazon_url(sole_url)
+                asin = app.asin_from_url(canonical)
+                segment = app_v12.v5.offer_segment(sole_message, sole_url, asin)
+                relevant = app_v12.v2.relevant_offer(segment)
+                print(
+                    f"SOLE_CTA raw={sole_url} canonical={canonical} asin={asin} "
+                    f"relevant={relevant} segment={segment[:350]!r}"
+                )
+                sole_seen_relevant = sole_seen_relevant or relevant
+                sole_seen_asin = sole_seen_asin or bool(asin)
+
+            if not sole_seen_relevant:
+                raise RuntimeError("Sole 123 lavaggi non entra nel filtro detergenza")
+            if not sole_seen_asin:
+                raise RuntimeError("Sole 123 lavaggi: redirect Amazon non risolto fino all'ASIN")
+            print("SOLE_CLASSIFICATION_OK")
+        else:
+            print("SOLE_TEST_SKIPPED message_not_found_today")
+
         aliases = app.load_aliases()
         cache = await app.cache_store.load({})
 
