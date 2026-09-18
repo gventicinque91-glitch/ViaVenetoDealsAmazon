@@ -25,10 +25,16 @@ def catalog_query(hint: str) -> str:
     value = re.sub(r"\s+-\s+\d{1,4}(?:[.,]\d{1,2})?\s*€.*$", "", value, flags=re.I)
     value = re.sub(r"\s+invece\s+di\s+.*$", "", value, flags=re.I)
     value = re.sub(r"^[✅⭐🔥⚡🛒📌\s]+", "", value)
-    # The first comma-separated clause normally contains brand, variant and size.
-    first = value.split(",", 1)[0]
-    first = re.sub(r"\s+", " ", first).strip(" -,:;")
-    return first[:120]
+    # Keep the extended commercial identity, including size/variant after commas.
+    # Cutting at the first comma loses decisive attributes such as "1,9 L".
+    value = re.sub(
+        r"\s+(?:minimo storico|offerta|coupon|venduto|spedito|apri su amazon|apri link amazon).*$",
+        "",
+        value,
+        flags=re.I,
+    )
+    value = re.sub(r"\s+", " ", value).strip(" -,:;")
+    return value[:180]
 
 
 def unit_query(hint: str) -> str:
