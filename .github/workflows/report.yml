@@ -71,7 +71,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Validate Python
-        run: python -m py_compile app.py app_v2.py app_v3.py app_v4.py app_v5.py app_v6.py app_v7.py app_v8.py app_v9.py app_v10.py app_v11.py app_v12.py run_report_once.py
+        run: python -m py_compile app.py app_v2.py app_v3.py app_v4.py app_v5.py app_v6.py app_v7.py app_v8.py app_v9.py app_v10.py app_v11.py app_v12.py app_v14.py run_report_once.py
 
       - name: Generate and send report
         run: python run_report_once.py
