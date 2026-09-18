@@ -133,9 +133,9 @@ async def dm_any_eans(query: str) -> tuple[list[str], list[str]]:
     return accepted[:4], ["dm"]
 
 
-async def broad_external_eans(query: str) -> tuple[list[str], list[str]]:
+async def broad_external_eans(query: str, asin: str = "") -> tuple[list[str], list[str]]:
     """Search the Internet for EANs first; Via Veneto is deliberately not consulted here."""
-    urls, search_bodies = await v14._search_web(query, asin="")
+    urls, search_bodies = await v14._search_web(query, asin=asin)
     evidence: dict[str, set[str]] = {}
     best_score: dict[str, float] = {}
 
@@ -159,10 +159,11 @@ async def broad_external_eans(query: str) -> tuple[list[str], list[str]]:
                 host = (urlparse(str(response.url)).hostname or urlparse(url).hostname or "").lower()
                 title = v14._page_title(body)
                 title_score = max(v6._title_score(query, title), v9._context_score(query, title))
+                has_asin = bool(asin and asin.casefold() in body.casefold())
                 codes = {code for code, _ in _contextual_codes(body, query)}
-                if title_score >= 5.5:
+                if title_score >= 5.5 or has_asin:
                     codes.update(_all_valid_gtins(body))
-                return host, sorted(codes), title_score
+                return host, sorted(codes), (12.0 if has_asin else title_score)
             except Exception:
                 return "", [], 0.0
 
@@ -240,22 +241,37 @@ async def name_identifiers(asin: str, hint: str, state: dict, cache: dict):
     elif full_query:
         plan.append((full_query, "package"))
 
-    # First try a structured catalogue, then the wider web. Neither checks Via Veneto.
+    # Search every relevant identity layer instead of stopping at the first hit.
+    # For multipacks, unit EAN candidates are intentionally ordered first; package
+    # candidates remain available if Via Veneto stores the bundle barcode instead.
     for query, mode in plan:
         codes, provider_sources = await dm_any_eans(query)
         if not codes:
-            codes, provider_sources = await broad_external_eans(query)
-        if codes:
-            for code in codes:
-                if code not in accepted:
-                    accepted.append(code)
-                    modes[code] = mode
-                    if mode == "unit" and amazon_pack > 1:
-                        pack_units[code] = amazon_pack
-            for source in provider_sources:
-                if source not in sources:
-                    sources.append(source)
-            break
+            codes, provider_sources = await broad_external_eans(
+                query,
+                asin=(asin if mode == "package" else ""),
+            )
+        for code in codes:
+            if code not in accepted:
+                accepted.append(code)
+                modes[code] = mode
+                if mode == "unit" and amazon_pack > 1:
+                    pack_units[code] = amazon_pack
+        for source in provider_sources:
+            if source not in sources:
+                sources.append(source)
+
+    # Exact ASIN evidence is a strong package-level fallback, especially for affiliate
+    # pages that publish ASIN + EAN explicitly.
+    if asin:
+        asin_codes, asin_sources = await broad_external_eans(full_query or hint, asin=asin)
+        for code in asin_codes:
+            if code not in accepted:
+                accepted.append(code)
+                modes[code] = "package"
+        for source in asin_sources:
+            if source not in sources:
+                sources.append(source)
 
     # Aggregate wash-count bundles, e.g. 123 washes -> 3 x 41, only when one factor wins.
     if not accepted and amazon_pack == 1 and full_query:
