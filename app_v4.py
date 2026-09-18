@@ -222,7 +222,7 @@ async def build_report(until: datetime | None = None) -> str:
             f"Offerte detergenza/igiene analizzate: {relevant}",
             f"Prodotti Via Veneto riconosciuti: {len(matched)}",
             f"Amazon più conveniente: {len(deals)}",
-            f"Non identificati con codice esatto: {len(unresolved)}",
+            f"Non identificati dopo ricerca EAN web: {len(unresolved)}",
         ]
 
         if deals:
@@ -246,8 +246,8 @@ async def build_report(until: datetime | None = None) -> str:
             lines += ["", "Nessuna offerta Amazon identificata con prezzo inferiore al riferimento Via Veneto."]
 
         if unresolved:
-            lines += ["", f"❓ Da identificare: {len(unresolved)} ASIN."]
-            for item in list(unresolved.values())[:8]:
+            lines += ["", f"❓ Ancora senza EAN verificato: {len(unresolved)} prodotti."]
+            for item in list(unresolved.values())[:5]:
                 lines.append(f"• {item.get('title') or item.get('asin')} · {item.get('asin')}")
         if no_price:
             lines.append(f"⚠️ {no_price} offerte ignorate perché il prezzo non era ricavabile.")
