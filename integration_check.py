@@ -5,9 +5,9 @@ import httpx
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
-import app_v14
+import app_v15
 
-app = app_v14.base
+app = app_v15.base
 
 
 async def bot_call(method: str, payload: dict):
@@ -22,7 +22,7 @@ async def bot_call(method: str, payload: dict):
 
 def find_offer(messages, asin: str):
     for message in messages:
-        for url in app_v14.v2.extract_urls(message):
+        for url in app_v15.v2.extract_urls(message):
             canonical_asin = app.asin_from_url(url)
             if canonical_asin == asin or asin in url.upper():
                 return message, url
@@ -40,10 +40,10 @@ async def main():
         me = await client.get_me()
         print(f"TELEGRAM_USER=OK id={getattr(me, 'id', '?')}")
 
-        sources = await app_v14.v3.find_source_chats()
+        sources = await app_v15.v3.find_source_chats()
         print("SOURCE_CHATS=OK " + " | ".join(name for name, _ in sources))
         now = datetime.now(app.ROME)
-        messages = await app_v14.v3.day_messages(now)
+        messages = await app_v15.v3.day_messages(now)
         print(f"TODAY_MESSAGES=OK count={len(messages)}")
 
         state = await app.vv.get_state()
@@ -59,7 +59,7 @@ async def main():
             None,
         )
         if tesori_message:
-            tesori_urls = app_v14.v2.extract_urls(tesori_message)
+            tesori_urls = app_v15.v2.extract_urls(tesori_message)
             print(f"TESORI_URL_CANDIDATES={tesori_urls}")
             if not tesori_urls:
                 raise RuntimeError("Tesori Hammam trovato ma nessun link Amazon/affiliate estratto")
@@ -71,7 +71,7 @@ async def main():
                 print(f"TESORI_URL raw={tesori_url} canonical={canonical} asin={asin}")
                 if not asin:
                     continue
-                result = await app_v14.v11.resolve_offer(
+                result = await app_v15.v11.resolve_offer(
                     tesori_message,
                     tesori_url,
                     state,
@@ -104,7 +104,7 @@ async def main():
             None,
         )
         if sole_message:
-            sole_urls = app_v14.v2.extract_urls(sole_message)
+            sole_urls = app_v15.v2.extract_urls(sole_message)
             print(f"SOLE_URL_CANDIDATES={sole_urls}")
             if not sole_urls:
                 raise RuntimeError("Sole 123 lavaggi trovato ma nessun link Amazon/affiliate estratto")
@@ -114,8 +114,8 @@ async def main():
             for sole_url in sole_urls:
                 canonical = await app.canonical_amazon_url(sole_url)
                 asin = app.asin_from_url(canonical)
-                segment = app_v14.v5.offer_segment(sole_message, sole_url, asin)
-                relevant = app_v14.v2.relevant_offer(segment)
+                segment = app_v15.v5.offer_segment(sole_message, sole_url, asin)
+                relevant = app_v15.v2.relevant_offer(segment)
                 print(
                     f"SOLE_CTA raw={sole_url} canonical={canonical} asin={asin} "
                     f"relevant={relevant} segment={segment[:350]!r}"
@@ -137,7 +137,7 @@ async def main():
         dove_message, dove_url = find_offer(messages, "B0D6ZJ276V")
         if not dove_message:
             raise RuntimeError("Offerta Dove di test non trovata")
-        dove = await app_v14.v11.resolve_offer(dove_message, dove_url, state, cache, aliases)
+        dove = await app_v15.v11.resolve_offer(dove_message, dove_url, state, cache, aliases)
         if not dove or dove.get("status") != "matched" or dove.get("ean") != "8720181460043":
             raise RuntimeError(f"Regressione Dove: {dove}")
         print(f"DOVE_RESOLVE=OK ean={dove['ean']} total={dove['amazon_total']:.2f} unit={dove['amazon_unit']:.2f}")
@@ -146,15 +146,15 @@ async def main():
         elmex_message, elmex_url = find_offer(messages, elmex_asin)
         if not elmex_message:
             raise RuntimeError("Offerta Elmex B0BZ58TBGD non trovata oggi")
-        elmex_segment = app_v14.v5.offer_segment(elmex_message, elmex_url, elmex_asin)
-        elmex_hint = app_v14.v2.product_hint(elmex_segment)
+        elmex_segment = app_v15.v5.offer_segment(elmex_message, elmex_url, elmex_asin)
+        elmex_hint = app_v15.v2.product_hint(elmex_segment)
         print(f"ELMEX_SEGMENT={elmex_segment}")
         print(f"ELMEX_HINT={elmex_hint}")
-        print(f"ELMEX_CATALOG_QUERY={app_v14.v8.catalog_query(elmex_hint)}")
-        print(f"ELMEX_UNIT_QUERY={app_v14.v8.unit_query(elmex_hint)}")
+        print(f"ELMEX_CATALOG_QUERY={app_v15.v8.catalog_query(elmex_hint)}")
+        print(f"ELMEX_UNIT_QUERY={app_v15.v8.unit_query(elmex_hint)}")
 
         elmex = await asyncio.wait_for(
-            app_v14.v11.resolve_offer(elmex_message, elmex_url, state, cache, aliases), timeout=180
+            app_v15.v11.resolve_offer(elmex_message, elmex_url, state, cache, aliases), timeout=180
         )
         print(f"ELMEX_RESOLVE={elmex}")
 
