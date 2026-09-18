@@ -24,5 +24,36 @@
     ],
     "units_per_pack": 1,
     "note": "WC Net Professional Fosse Biologiche 20 caps; EAN verified on Carrefour Italia"
+  },
+  {
+    "contains": [
+      "chanteclair",
+      "pulito profondo",
+      "1575"
+    ],
+    "unit_eans": [
+      "8015194533236"
+    ],
+    "package_eans": [
+      "8015194533397"
+    ],
+    "units_per_pack": 3,
+    "note": "Chanteclair Pulito Profondo 1575 ml: unit GTIN verified on dm Italia; tripack GTIN verified on official Chanteclair promo/public listings"
+  },
+  {
+    "contains": [
+      "fabuloso",
+      "cocco",
+      "fiori bianchi",
+      "1,9l"
+    ],
+    "unit_eans": [
+      "8718951419568"
+    ],
+    "package_eans": [
+      "8718951419568"
+    ],
+    "units_per_pack": 1,
+    "note": "Fabuloso Cocco & Fiori Bianchi 1.9 L: EAN verified across multiple public catalogues"
   }
 ]
