@@ -2,8 +2,10 @@
 
 import asyncio
 import html as html_lib
+import json
 import re
 from datetime import datetime
+from pathlib import Path
 from urllib.parse import urlparse
 
 import app_v14 as v14
@@ -22,6 +24,28 @@ v2 = v14.v2
 base = v14.base
 
 RESOLVER_VERSION = 9
+TITLE_ALIASES_FILE = Path("verified_title_aliases.json")
+
+
+def _norm_title(value: str) -> str:
+    return re.sub(r"[^a-z0-9à-ÿ]+", " ", (value or "").casefold()).strip()
+
+
+def _load_title_aliases() -> list[dict]:
+    try:
+        payload = json.loads(TITLE_ALIASES_FILE.read_text(encoding="utf-8"))
+        return [row for row in payload if isinstance(row, dict)] if isinstance(payload, list) else []
+    except Exception:
+        return []
+
+
+def verified_title_alias(hint: str) -> dict | None:
+    norm = _norm_title(hint)
+    for row in _load_title_aliases():
+        needles = [_norm_title(x) for x in (row.get("contains") or []) if str(x).strip()]
+        if needles and all(token in norm for token in needles):
+            return row
+    return None
 
 
 def _all_valid_gtins(raw: str) -> list[str]:
@@ -300,12 +324,27 @@ async def resolve_offer(message, amazon_url: str, state: dict, cache: dict, alia
     external_ids: list[str] = []
     title = ""
 
+    title_alias = verified_title_alias(hint)
+    if title_alias:
+        verified_codes = [
+            base.normalize_gtin(code)
+            for code in (title_alias.get("eans") or [])
+            if base.valid_gtin(base.normalize_gtin(code))
+        ]
+        if verified_codes:
+            external_ids = list(dict.fromkeys(external_ids + verified_codes))
+            match = base.vv.first_match(state, verified_codes)
+            if match:
+                units = max(1, int(title_alias.get("units_per_pack") or 1))
+                verified_pack = True
+                identifier_source = "nome→EAN verificato"
+
     alias = aliases.get(asin)
-    if alias:
+    if alias and not match:
         alias_ean = base.normalize_gtin(alias.get("ean"))
         if base.valid_gtin(alias_ean):
-            external_ids = [alias_ean]
-            match = base.vv.first_match(state, external_ids)
+            external_ids = list(dict.fromkeys(external_ids + [alias_ean]))
+            match = base.vv.first_match(state, [alias_ean])
             if match:
                 units = max(1, int(alias.get("units_per_pack") or 1))
                 verified_pack = True
