@@ -342,18 +342,35 @@ async def resolve_offer(message, amazon_url: str, state: dict, cache: dict, alia
 
     title_alias = verified_title_alias(hint)
     if title_alias:
-        verified_codes = [
+        unit_codes = [
             base.normalize_gtin(code)
-            for code in (title_alias.get("eans") or [])
+            for code in (title_alias.get("unit_eans") or [])
             if base.valid_gtin(base.normalize_gtin(code))
         ]
+        package_codes = [
+            base.normalize_gtin(code)
+            for code in (title_alias.get("package_eans") or title_alias.get("eans") or [])
+            if base.valid_gtin(base.normalize_gtin(code))
+        ]
+        verified_codes = list(dict.fromkeys(unit_codes + package_codes))
         if verified_codes:
             external_ids = list(dict.fromkeys(external_ids + verified_codes))
-            match = base.vv.first_match(state, verified_codes)
-            if match:
-                units = max(1, int(title_alias.get("units_per_pack") or 1))
-                verified_pack = True
-                identifier_source = "nome→EAN verificato"
+
+            # Prefer the sellable-unit barcode when Via Veneto contains it.
+            if unit_codes:
+                match = base.vv.first_match(state, unit_codes)
+                if match:
+                    units = max(1, int(title_alias.get("units_per_pack") or 1))
+                    verified_pack = True
+                    identifier_source = "nome→EAN verificato (unità)"
+
+            # Otherwise accept the verified bundle/package barcode without division.
+            if not match and package_codes:
+                match = base.vv.first_match(state, package_codes)
+                if match:
+                    units = 1
+                    verified_pack = True
+                    identifier_source = "nome→EAN verificato (confezione)"
 
     alias = aliases.get(asin)
     if alias and not match:
