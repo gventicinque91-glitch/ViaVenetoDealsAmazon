@@ -237,11 +237,25 @@ async def name_identifiers(asin: str, hint: str, state: dict, cache: dict):
         and cached_query
         and cached_query == str(full_query or "").strip().casefold()
     ):
-        return (
-            list(cached.get("name_identifiers") or []),
-            dict(cached.get("name_identifier_modes") or {}),
-            list(cached.get("name_sources") or []),
-        )
+        cached_ids = list(cached.get("name_identifiers") or [])
+        if cached_ids:
+            return (
+                cached_ids,
+                dict(cached.get("name_identifier_modes") or {}),
+                list(cached.get("name_sources") or []),
+            )
+
+        # Do not turn a temporary web/search failure into a permanent "unresolved".
+        # Negative results are cached only briefly, then retried automatically.
+        try:
+            checked = datetime.fromisoformat(str(cached.get("name_checked_at") or ""))
+            if checked.tzinfo is None:
+                checked = checked.replace(tzinfo=base.ROME)
+            age = (datetime.now(base.ROME) - checked.astimezone(base.ROME)).total_seconds()
+        except Exception:
+            age = 10**9
+        if age < 1800:
+            return [], {}, list(cached.get("name_sources") or [])
 
     accepted: list[str] = []
     modes: dict[str, str] = {}
