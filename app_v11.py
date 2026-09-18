@@ -44,6 +44,7 @@ async def resolve_offer(message, amazon_url: str, state: dict, cache: dict, alia
     match = None
     verified_pack = False
     pack_mode = ""
+    resolved_pack_units = 1
     title = ""
 
     # 1) Explicit, manually verified ASIN→EAN aliases remain the strongest evidence.
@@ -70,10 +71,15 @@ async def resolve_offer(message, amazon_url: str, state: dict, cache: dict, alia
         cached = cache.get(asin) if isinstance(cache.get(asin), dict) else {}
         cached_name_ids = list(cached.get("name_identifiers") or [])
         cached_modes = dict(cached.get("name_identifier_modes") or {})
+        cached_pack_units = dict(cached.get("name_pack_units") or {})
         if cached_name_ids:
             match = base.vv.first_match(state, cached_name_ids)
             if match:
                 pack_mode = cached_modes.get(match[0], "")
+                try:
+                    resolved_pack_units = max(1, int(cached_pack_units.get(match[0]) or 1))
+                except Exception:
+                    resolved_pack_units = 1
                 sources = list(cached.get("name_sources") or [])
                 identifier_source = "nome→EAN cache" + (f" ({', '.join(sources[:2])})" if sources else "")
 
@@ -83,6 +89,12 @@ async def resolve_offer(message, amazon_url: str, state: dict, cache: dict, alia
         match = base.vv.first_match(state, identifiers)
         if match:
             pack_mode = modes.get(match[0], "")
+            refreshed = cache.get(asin) if isinstance(cache.get(asin), dict) else {}
+            pack_units = dict(refreshed.get("name_pack_units") or {})
+            try:
+                resolved_pack_units = max(1, int(pack_units.get(match[0]) or 1))
+            except Exception:
+                resolved_pack_units = 1
             identifier_source = "nome→EAN" + (f" ({', '.join(sources[:2])})" if sources else "")
 
     # 5) Optional Keepa fallback. Only call it when a Keepa key is actually configured;
@@ -117,6 +129,10 @@ async def resolve_offer(message, amazon_url: str, state: dict, cache: dict, alia
                 "url": canonical,
                 "title": (hint or title) + f" [multipack x{detected_pack}: relazione EAN/unità da verificare]",
             }
+    elif detected_pack == 1 and pack_mode == "unit" and resolved_pack_units > 1:
+        # External catalogue evidence established that an aggregate title such as
+        # "123 lavaggi" is a bundle of N retail units.
+        units = resolved_pack_units
 
     ean, via = match
     amazon_unit = round(price / units, 4)
