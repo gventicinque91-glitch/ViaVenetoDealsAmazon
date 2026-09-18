@@ -6,9 +6,9 @@ import httpx
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
-import app_v12
+import app_v14
 
-base = app_v12.base
+base = app_v14.base
 
 
 def env(name: str, default: str = "") -> str:
