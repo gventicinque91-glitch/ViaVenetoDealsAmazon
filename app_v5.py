@@ -18,32 +18,34 @@ def _is_cta_line(value: str) -> bool:
 
 
 def _context_block_around(text_surrogate: str, start: int, end: int) -> str:
-    """Return the product block around a Telegram text-link.
+    """Return a bounded block before/around a CTA-only Telegram link.
 
-    Many channels put the Amazon CTA on its own line. In that layout the old code
-    returned only "APRI SU AMAZON", losing product name and price. Prefer the
-    paragraph containing the CTA; if the post has no blank-line separators, include
-    a bounded number of preceding lines.
+    Deal channels often put blank lines between title, promo text, price and
+    "APRI SU AMAZON". A paragraph-only slice therefore loses the product name.
+    Walk backwards by lines instead, stopping at strong post separators.
     """
-    para_start = text_surrogate.rfind("\n\n", 0, start)
-    para_start = para_start + 2 if para_start >= 0 else -1
-    para_end = text_surrogate.find("\n\n", end)
-    if para_end < 0:
-        para_end = len(text_surrogate)
+    line_end = text_surrogate.find("\n", end)
+    if line_end < 0:
+        line_end = len(text_surrogate)
 
-    if para_start < 0:
-        # Fall back to at most 8 preceding lines so a CTA-only anchor still carries
-        # product title, price and pack information without swallowing the whole post.
-        cursor = start
-        for _ in range(8):
-            prev = text_surrogate.rfind("\n", 0, cursor)
-            if prev < 0:
-                cursor = 0
-                break
-            cursor = prev
-        para_start = cursor + (1 if cursor > 0 else 0)
+    cursor = start
+    line_starts = [text_surrogate.rfind("\n", 0, cursor) + 1]
+    # Include enough preceding lines to retain title + price even with blank lines.
+    for _ in range(14):
+        prev_nl = text_surrogate.rfind("\n", 0, max(0, line_starts[-1] - 1))
+        if prev_nl < 0:
+            line_starts.append(0)
+            break
+        candidate_start = prev_nl + 1
+        candidate_end = line_starts[-1] - 1
+        candidate = del_surrogate(text_surrogate[candidate_start:candidate_end]).strip()
+        # Strong separators used by multi-offer posts: do not bleed into prior products.
+        if re.fullmatch(r"[\s➖━─—_-]{4,}", candidate or ""):
+            break
+        line_starts.append(candidate_start)
 
-    block = del_surrogate(text_surrogate[para_start:para_end]).strip()
+    block_start = line_starts[-1]
+    block = del_surrogate(text_surrogate[block_start:line_end]).strip()
     return block
 
 
