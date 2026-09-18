@@ -49,6 +49,51 @@ async def main():
         state = await app.vv.get_state()
         print(f"VIA_VENETO=OK revision={app.vv.revision} generation={app.vv.generation}")
 
+        # Regression for channels that hide Amazon behind a CTA text-link.
+        tesori_message = next(
+            (
+                m for m in messages
+                if "tesori d'oriente" in str(m.message or "").casefold()
+                and "hammam" in str(m.message or "").casefold()
+            ),
+            None,
+        )
+        if tesori_message:
+            tesori_urls = app_v12.v2.extract_urls(tesori_message)
+            print(f"TESORI_URL_CANDIDATES={tesori_urls}")
+            if not tesori_urls:
+                raise RuntimeError("Tesori Hammam trovato ma nessun link Amazon/affiliate estratto")
+
+            tesori_resolved = None
+            for tesori_url in tesori_urls:
+                canonical = await app.canonical_amazon_url(tesori_url)
+                asin = app.asin_from_url(canonical)
+                print(f"TESORI_URL raw={tesori_url} canonical={canonical} asin={asin}")
+                if not asin:
+                    continue
+                result = await app_v12.v11.resolve_offer(
+                    tesori_message,
+                    tesori_url,
+                    state,
+                    await app.cache_store.load({}),
+                    app.load_aliases(),
+                )
+                print(f"TESORI_RESOLVE={result}")
+                if result and result.get("status") == "matched":
+                    tesori_resolved = result
+                    break
+
+            if not tesori_resolved:
+                raise RuntimeError("Tesori Hammam non risolto come offerta detergenza/igiene")
+            if tesori_resolved.get("ean") != "8008970005591":
+                raise RuntimeError(f"Tesori Hammam EAN inatteso: {tesori_resolved.get('ean')}")
+            print(
+                f"TESORI_MATCH_OK ean={tesori_resolved['ean']} "
+                f"asin={tesori_resolved['asin']} unit={tesori_resolved['amazon_unit']:.2f}"
+            )
+        else:
+            print("TESORI_TEST_SKIPPED message_not_found_today")
+
         aliases = app.load_aliases()
         cache = await app.cache_store.load({})
 
