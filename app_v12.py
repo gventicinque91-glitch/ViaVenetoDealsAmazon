@@ -106,10 +106,40 @@ async def dm_name_identifiers(query: str, state: dict) -> tuple[list[str], list[
     return accepted, ["dm"] if accepted else []
 
 
+def _wash_bundle_queries(query: str) -> list[tuple[str, int]]:
+    """Generate conservative unit-title candidates from aggregate wash counts.
+
+    Example: "123 Lavaggi" can only be split cleanly as 3 x 41 within the normal
+    retail-dose range, so the unit query becomes "41 Lavaggi". Ambiguous totals are
+    kept as multiple candidates and accepted only when one candidate resolves uniquely.
+    """
+    match = re.search(r"\b(\d{2,3})\s*(lavaggi|dosi|misurini)\b", query or "", flags=re.I)
+    if not match:
+        return []
+    total = int(match.group(1))
+    label = match.group(2)
+    out: list[tuple[str, int]] = []
+    for factor in (2, 3, 4, 5, 6):
+        if total % factor:
+            continue
+        unit = total // factor
+        if not 15 <= unit <= 70:
+            continue
+        unit_query = (
+            (query or "")[: match.start()]
+            + f"{unit} {label}"
+            + (query or "")[match.end() :]
+        )
+        unit_query = re.sub(r"\s+", " ", unit_query).strip()
+        if unit_query and unit_query.casefold() != (query or "").casefold():
+            out.append((unit_query, factor))
+    return out
+
+
 async def name_identifiers(asin: str, hint: str, state: dict, cache: dict):
     cached = cache.get(asin) if isinstance(cache.get(asin), dict) else {}
     version = int(cached.get("name_resolver_version") or 0)
-    if version >= 6 and cached.get("name_lookup_done"):
+    if version >= 7 and cached.get("name_lookup_done"):
         return (
             list(cached.get("name_identifiers") or []),
             dict(cached.get("name_identifier_modes") or {}),
@@ -122,6 +152,7 @@ async def name_identifiers(asin: str, hint: str, state: dict, cache: dict):
     accepted: list[str] = []
     modes: dict[str, str] = {}
     sources: list[str] = []
+    pack_units: dict[str, int] = {}
 
     # dm covers both personal-care and household-cleaning products, which maps well to
     # the Telegram categories monitored by this bot. For multipacks search the retail
@@ -144,6 +175,38 @@ async def name_identifiers(asin: str, hint: str, state: dict, cache: dict):
             sources.extend(x for x in provider_sources if x not in sources)
             break
 
+    # Some laundry bundles advertise only the aggregate wash count (e.g. 123 washes)
+    # instead of "3 x 41". If the normal title did not match, derive conservative
+    # unit-count candidates and accept them only when exactly one factor resolves to
+    # an exact Via Veneto EAN through an external catalogue/page.
+    if not accepted and amazon_pack == 1 and full_query:
+        inferred_hits: list[tuple[str, int, list[str]]] = []
+        for unit_candidate, factor in _wash_bundle_queries(full_query):
+            codes, provider_sources = await dm_name_identifiers(unit_candidate, state)
+            candidate_sources = list(provider_sources)
+            if not codes:
+                try:
+                    codes, page_sources = await v10.page_evidence(unit_candidate, state)
+                except Exception:
+                    codes, page_sources = [], []
+                candidate_sources.extend(x for x in page_sources if x not in candidate_sources)
+            for code in codes:
+                inferred_hits.append((code, factor, candidate_sources))
+
+        unique = {(code, factor) for code, factor, _ in inferred_hits}
+        factors = {factor for _, factor in unique}
+        if len(unique) == 1 or (len(factors) == 1 and unique):
+            chosen_factor = next(iter(factors))
+            for code, factor, candidate_sources in inferred_hits:
+                if factor != chosen_factor or code in accepted:
+                    continue
+                accepted.append(code)
+                modes[code] = "unit"
+                pack_units[code] = factor
+                for source in candidate_sources:
+                    if source not in sources:
+                        sources.append(source)
+
     # Keep the broader public-web resolver as a fallback for products dm does not stock.
     if not accepted:
         old_codes, old_modes, old_sources = await _original_name_identifiers(asin, hint, state, cache)
@@ -151,15 +214,21 @@ async def name_identifiers(asin: str, hint: str, state: dict, cache: dict):
         modes = dict(old_modes)
         sources = list(old_sources)
 
+    if amazon_pack > 1:
+        for code, mode in modes.items():
+            if mode == "unit" and code not in pack_units:
+                pack_units[code] = amazon_pack
+
     entry = dict(cache.get(asin) if isinstance(cache.get(asin), dict) else cached)
     entry.update({
         "name_lookup_done": True,
-        "name_resolver_version": 6,
+        "name_resolver_version": 7,
         "name_checked_at": datetime.now(base.ROME).isoformat(),
         "name_query": full_query,
         "name_unit_query": single_query,
         "name_identifiers": accepted,
         "name_identifier_modes": modes,
+        "name_pack_units": pack_units,
         "name_sources": sources,
     })
     if accepted:
@@ -168,7 +237,7 @@ async def name_identifiers(asin: str, hint: str, state: dict, cache: dict):
             entry["title"] = hint
     cache[asin] = entry
     await base.cache_store.save(cache)
-    base.LOG.info("Name->EAN v6 ASIN=%s accepted=%s modes=%s sources=%s", asin, accepted, modes, sources)
+    base.LOG.info("Name->EAN v7 ASIN=%s accepted=%s modes=%s pack_units=%s sources=%s", asin, accepted, modes, pack_units, sources)
     return accepted, modes, sources
 
 
