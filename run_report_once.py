@@ -15,9 +15,9 @@ def env(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip()
 
 
-def parse_cutoff(raw: str) -> datetime:
+def parse_time(raw: str, *, fallback_now: bool = True) -> datetime | None:
     if not raw:
-        return datetime.now(base.ROME)
+        return datetime.now(base.ROME) if fallback_now else None
     value = raw.replace("Z", "+00:00")
     dt = datetime.fromisoformat(value)
     if dt.tzinfo is None:
@@ -25,10 +25,16 @@ def parse_cutoff(raw: str) -> datetime:
     return dt.astimezone(base.ROME)
 
 
-def elapsed(started: datetime) -> str:
-    seconds = max(0, int((datetime.now(base.ROME) - started).total_seconds()))
+def duration_text(started: datetime, ended: datetime | None = None) -> str:
+    ended = ended or datetime.now(base.ROME)
+    seconds = max(0, int((ended - started).total_seconds()))
     minutes, sec = divmod(seconds, 60)
-    return f"{minutes}m {sec:02d}s" if minutes else f"{sec}s"
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}m {sec:02d}s"
+    if minutes:
+        return f"{minutes}m {sec:02d}s"
+    return f"{sec}s"
 
 
 async def bot_call(method: str, payload: dict):
@@ -68,17 +74,26 @@ async def edit_message(chat_id: str, message_id: int, text: str):
         return None
 
 
-async def heartbeat(chat_id: str, message_id: int, started: datetime, cutoff: datetime, stop: asyncio.Event):
+async def heartbeat(
+    chat_id: str,
+    message_id: int,
+    processing_started: datetime,
+    requested_at: datetime,
+    cutoff: datetime,
+    stop: asyncio.Event,
+):
     while True:
         try:
             await asyncio.wait_for(stop.wait(), timeout=20)
             return
         except asyncio.TimeoutError:
+            now = datetime.now(base.ROME)
             await edit_message(
                 chat_id,
                 message_id,
                 "⏳ Report ancora in corso…\n"
-                f"Tempo trascorso: {elapsed(started)}\n"
+                f"Tempo totale dalla richiesta: {duration_text(requested_at, now)}\n"
+                f"Elaborazione effettiva: {duration_text(processing_started, now)}\n"
                 f"Dati fino alle {cutoff.strftime('%H:%M')}.\n"
                 "Sto leggendo Telegram, risolvendo EAN e confrontando Via Veneto.\n"
                 "Puoi usare /status in qualsiasi momento.",
@@ -87,7 +102,8 @@ async def heartbeat(chat_id: str, message_id: int, started: datetime, cutoff: da
 
 async def main():
     base.validate_config()
-    cutoff = parse_cutoff(env("REPORT_CUTOFF"))
+    cutoff = parse_time(env("REPORT_CUTOFF")) or datetime.now(base.ROME)
+    requested_at = parse_time(env("REPORT_REQUESTED_AT"), fallback_now=False) or cutoff
     origin = env("REPORT_ORIGIN", "manual")
     chat_id = env("REPORT_CHAT_ID")
     raw_status_message_id = env("STATUS_MESSAGE_ID")
@@ -96,7 +112,7 @@ async def main():
     client = TelegramClient(StringSession(base.USER_SESSION), base.API_ID, base.API_HASH)
     await client.connect()
     base.user_client = client
-    started = datetime.now(base.ROME)
+    processing_started = datetime.now(base.ROME)
     stop = asyncio.Event()
     hb_task = None
 
@@ -122,24 +138,49 @@ async def main():
             status = await send_message(chat_id, text)
             status_message_id = int(status.get("message_id") or 0)
 
-        hb_task = asyncio.create_task(heartbeat(chat_id, status_message_id, started, cutoff, stop))
+        hb_task = asyncio.create_task(
+            heartbeat(
+                chat_id,
+                status_message_id,
+                processing_started,
+                requested_at,
+                cutoff,
+                stop,
+            )
+        )
 
-        print(f"REPORT_START origin={origin} chat={chat_id} cutoff={cutoff.isoformat()}")
+        queue_wait = duration_text(requested_at, processing_started)
+        print(
+            f"REPORT_START origin={origin} chat={chat_id} cutoff={cutoff.isoformat()} "
+            f"requested_at={requested_at.isoformat()} queue_wait={queue_wait}"
+        )
         report = await base.build_report(cutoff)
-        print(f"REPORT_BUILT chars={len(report)} elapsed={elapsed(started)}")
+        built_at = datetime.now(base.ROME)
+        print(
+            f"REPORT_BUILT chars={len(report)} "
+            f"processing={duration_text(processing_started, built_at)} "
+            f"total={duration_text(requested_at, built_at)}"
+        )
 
         for part in base.chunks(report):
             await send_message(chat_id, part)
 
+        finished = datetime.now(base.ROME)
         await edit_message(
             chat_id,
             status_message_id,
             "✅ Report completato.\n"
-            f"Durata: {elapsed(started)}\n"
+            f"Tempo totale dalla richiesta: {duration_text(requested_at, finished)}\n"
+            f"Attesa avvio GitHub: {duration_text(requested_at, processing_started)}\n"
+            f"Elaborazione effettiva: {duration_text(processing_started, finished)}\n"
             f"Dati analizzati fino alle {cutoff.strftime('%H:%M')}.",
         )
-        print(f"REPORT_SUCCESS elapsed={elapsed(started)}")
+        print(
+            f"REPORT_SUCCESS processing={duration_text(processing_started, finished)} "
+            f"total={duration_text(requested_at, finished)}"
+        )
     except Exception as exc:
+        failed_at = datetime.now(base.ROME)
         error = f"{type(exc).__name__}: {exc}"
         print(f"REPORT_ERROR {error}")
         if chat_id and status_message_id:
@@ -147,7 +188,8 @@ async def main():
                 chat_id,
                 status_message_id,
                 "❌ Report non completato.\n"
-                f"Dopo: {elapsed(started)}\n"
+                f"Tempo totale dalla richiesta: {duration_text(requested_at, failed_at)}\n"
+                f"Elaborazione effettiva: {duration_text(processing_started, failed_at)}\n"
                 f"Errore: {error[:700]}\n\n"
                 "Usa /status per vedere lo stato GitHub dell'esecuzione.",
             )
