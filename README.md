@@ -6,8 +6,9 @@ Servizio separato per monitorare le offerte Amazon pubblicate nei canali Telegra
 
 - Legge la cronologia del giorno delle fonti Telegram configurate.
 - Report automatico ogni giorno alle **20:00 Europe/Rome**.
-- Report manuale con `/sconti` o `/report`, dalle 00:00 fino al momento del comando.
-- `/status` mostra lo stato dell'ultimo report.
+- Report manuale con `/sconti` o `/report`, dalle 00:00 fino all'istante del comando.
+- `/status` mostra se il report è in coda, in elaborazione, completato o fallito.
+- Il messaggio finale distingue **tempo totale dalla richiesta**, **attesa avvio GitHub** ed **elaborazione effettiva**.
 - Identificazione rigorosa: alias verificato -> GTIN/EAN nel messaggio -> cache ASIN -> resolver esterni verificati.
 - Nessun fuzzy match verso Via Veneto per decidere l'identità del prodotto: il confronto finale avviene per codice esatto.
 - Confronto Via Veneto: **ultimo prezzo di acquisto confermato**; se assente, **ultimo listino/ordine**.
@@ -15,17 +16,18 @@ Servizio separato per monitorare le offerte Amazon pubblicate nei canali Telegra
 
 ## Architettura attiva
 
-La configurazione principale non richiede un server sempre acceso né secret Cloudflare aggiuntivi.
+La configurazione principale non richiede un server esterno sempre acceso né secret Cloudflare aggiuntivi.
 
-1. `.github/workflows/bot-poller.yml` controlla periodicamente i comandi ricevuti dal bot Telegram.
-2. `bot_poller.py` gestisce `/start`, `/sconti`, `/report` e `/status`.
-3. Per `/sconti` viene lanciato `.github/workflows/report.yml` tramite il `GITHUB_TOKEN` temporaneo della stessa GitHub Action.
-4. `.github/workflows/daily-report-dispatch.yml` avvia il report automatico quando sono le 20:00 in `Europe/Rome`, gestendo automaticamente ora legale/solare.
-5. `run_report_once.py` legge Telegram con Telethon, genera il report e lo invia tramite il bot.
+1. `.github/workflows/bot-listener.yml` mantiene un listener Telegram attivo per diverse ore su un runner GitHub.
+2. `bot_listener.py` usa il long polling Telegram e normalmente riceve `/start`, `/sconti`, `/report` e `/status` in pochi secondi.
+3. Prima di terminare, il listener lancia automaticamente il proprio successore; uno schedule periodico funge da watchdog.
+4. Per `/sconti`, il listener passa a `.github/workflows/report.yml` **l'orario reale del comando Telegram**. Il cut-off del report non dipende quindi dall'eventuale coda GitHub.
+5. `.github/workflows/daily-report-dispatch.yml` avvia il report automatico quando sono le 20:00 in `Europe/Rome`, gestendo automaticamente ora legale/solare.
+6. `run_report_once.py` legge Telegram con Telethon, genera il report e aggiorna su Telegram il tempo totale e il tempo di elaborazione.
 
-Il polling dei comandi è ogni 5 minuti, quindi un comando Telegram può impiegare alcuni minuti a partire. Anche gli schedule GitHub possono avere un piccolo ritardo rispetto all'orario nominale.
+Il vecchio poller cron ogni 5 minuti è stato disattivato perché gli schedule GitHub possono partire con ritardo e rendevano la risposta ai comandi imprevedibile.
 
-I file Cloudflare Worker restano nel repository come alternativa per una futura modalità webhook immediata, ma non sono necessari per la configurazione GitHub-only.
+I file Cloudflare Worker restano nel repository come alternativa futura per una modalità webhook, ma non sono necessari per la configurazione GitHub-only.
 
 ## Secret richiesti in GitHub Actions
 
