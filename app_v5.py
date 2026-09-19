@@ -40,6 +40,11 @@ def _context_block_around(text_surrogate: str, start: int, end: int) -> str:
         candidate_start = prev_nl + 1
         candidate_end = line_starts[-1] - 1
         candidate = del_surrogate(text_surrogate[candidate_start:candidate_end]).strip()
+        # A previous CTA is itself a hard product boundary in multi-offer posts.
+        # Without this, the second/third offer can inherit the title and category
+        # of the product immediately above it.
+        if candidate and _is_cta_line(candidate):
+            break
         # Strong separators used by multi-offer posts: do not bleed into prior products.
         if re.fullmatch(r"[\s➖━─—_-]{4,}", candidate or ""):
             break
