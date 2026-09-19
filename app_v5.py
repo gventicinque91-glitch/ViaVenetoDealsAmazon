@@ -109,9 +109,41 @@ def offer_segment(message, amazon_url: str, asin: str) -> str:
         if block:
             return block
 
+    # Generic multi-offer fallback: when the URL comes from a Telegram button (or an
+    # entity representation that does not compare byte-for-byte with amazon_url),
+    # bind URLs and CTA lines by their order in the post. This prevents a later
+    # fashion/household link from inheriting the previous detergent product block.
+    try:
+        ordered_urls = v2.extract_urls(message)
+        target_index = ordered_urls.index(amazon_url)
+    except Exception:
+        target_index = -1
+
+    if target_index >= 0:
+        lines = text.splitlines(True)
+        ctas: list[tuple[int, int]] = []
+        pos = 0
+        for raw_line in lines:
+            line_end = pos + len(raw_line)
+            plain = raw_line.strip()
+            if plain and _is_cta_line(plain):
+                ctas.append((pos, line_end))
+            pos = line_end
+
+        if target_index < len(ctas):
+            current_start, current_end = ctas[target_index]
+            previous_end = ctas[target_index - 1][1] if target_index > 0 else 0
+            block = text[previous_end:current_end].strip()
+            # Remove the CTA line itself, retaining the product title and price.
+            block_lines = block.splitlines()
+            while block_lines and _is_cta_line(block_lines[-1].strip()):
+                block_lines.pop()
+            block = "\n".join(block_lines).strip()
+            if block:
+                return block
+
     # For inline URLs, use the legacy local context. For button-only affiliate links,
-    # the URL is not present in message text, so use the full post; category filtering
-    # and price parsing will still discard unrelated posts.
+    # the URL is not present in message text, so use the full post only as a last resort.
     fallback = v2.offer_context(text, asin, amazon_url)
     if fallback == text and amazon_url not in text:
         return text
