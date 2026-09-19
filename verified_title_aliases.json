@@ -55,5 +55,18 @@
     ],
     "units_per_pack": 1,
     "note": "Fabuloso Cocco & Fiori Bianchi 1.9 L: EAN verified across multiple public catalogues"
+  },
+  {
+    "contains": [
+      "palmolive",
+      "shampoo",
+      "effetto seta",
+      "350"
+    ],
+    "eans": [
+      "8718951576971"
+    ],
+    "units_per_pack": 1,
+    "note": "Palmolive Naturals Shampoo Effetto Seta / Silky Shine 350 ml; EAN verified on public Italian product catalogues"
   }
 ]

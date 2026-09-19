@@ -220,6 +220,43 @@ async def main():
             ["fabuloso", "cocco", "fiori bianchi"],
             {"8718951419568"},
         )
+        await assert_today_product(
+            "PALMOLIVE",
+            ["palmolive", "effetto seta", "350"],
+            {"8718951576971"},
+        )
+
+        # Regression for CTA links embedded on a product line inside a multi-offer
+        # Telegram post. Fashion offers after Palmolive must not inherit Palmolive's
+        # identity/category just because their CTA is on a later line.
+        mixed_message = next(
+            (
+                m for m in messages
+                if "palmolive" in str(m.message or "").casefold()
+                and "marc o'polo" in str(m.message or "").casefold()
+            ),
+            None,
+        )
+        if mixed_message:
+            checked_mixed = False
+            for mixed_url in app_v15.v2.extract_urls(mixed_message):
+                canonical = await app.canonical_amazon_url(mixed_url)
+                mixed_asin = app.asin_from_url(canonical)
+                if mixed_asin not in {"B0FG8BG9X3", "B09VH1HPLP"}:
+                    continue
+                checked_mixed = True
+                segment = app_v15.v5.offer_segment(mixed_message, mixed_url, mixed_asin)
+                print(f"MIXED_SEGMENT asin={mixed_asin} segment={segment[:350]!r}")
+                if "palmolive" in segment.casefold():
+                    raise RuntimeError(
+                        f"Segmentazione CTA contaminata: {mixed_asin} ha ereditato Palmolive"
+                    )
+            if checked_mixed:
+                print("MIXED_CTA_SEGMENT_OK")
+            else:
+                print("MIXED_CTA_TEST_SKIPPED target_asin_not_found")
+        else:
+            print("MIXED_CTA_TEST_SKIPPED mixed_message_not_found")
 
         aliases = app.load_aliases()
         cache = await app.cache_store.load({})

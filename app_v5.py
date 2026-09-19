@@ -81,8 +81,29 @@ def offer_segment(message, amazon_url: str, asin: str) -> str:
             line_end = len(surrogate)
         line = del_surrogate(surrogate[line_start:line_end]).strip()
 
-        if line and not _is_cta_line(line):
-            return line
+        if line:
+            # A common channel layout puts the product description, price and CTA
+            # on the same line. The previous logic treated any line containing
+            # "Amazon"/"Apri" as CTA-only and then walked backwards, which could
+            # attach the link to a previous product in the same multi-offer post.
+            line_surrogate = surrogate[line_start:line_end]
+            rel_start = max(0, start - line_start)
+            rel_end = max(rel_start, min(len(line_surrogate), end - line_start))
+            before = del_surrogate(line_surrogate[:rel_start]).strip()
+            after = del_surrogate(line_surrogate[rel_end:]).strip()
+            substantive = re.sub(
+                r"^[\\s👉➡️•·|–—-]+|[\\s👉➡️•·|–—-]+$",
+                "",
+                f"{before} {after}",
+            ).strip()
+
+            # If removing the linked CTA leaves a category-relevant offer, this
+            # exact line is the correct identity context for this URL.
+            if substantive and v2.relevant_offer(substantive):
+                return substantive
+
+            if not _is_cta_line(line):
+                return line
 
         block = _context_block_around(surrogate, start, end)
         if block:

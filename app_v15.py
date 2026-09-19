@@ -23,7 +23,7 @@ v3 = v14.v3
 v2 = v14.v2
 base = v14.base
 
-RESOLVER_VERSION = 10
+RESOLVER_VERSION = 11
 TITLE_ALIASES_FILE = Path("verified_title_aliases.json")
 
 
@@ -295,6 +295,34 @@ async def name_identifiers(asin: str, hint: str, state: dict, cache: dict):
                 for source in provider_sources:
                     if source not in sources:
                         sources.append(source)
+
+    # Independent catalogue fallback. Public search engines may throttle GitHub
+    # runners even when the same EAN is obvious from a normal browser search.
+    # UPCitemdb is therefore kept as a separate path; its title is matched only
+    # against the external product hint and the final identity check is still an
+    # exact EAN lookup in Via Veneto (never fuzzy DB-description matching).
+    if not accepted:
+        for query, mode in plan:
+            try:
+                items = await v6._upc_search(query)
+            except Exception as exc:
+                base.LOG.debug("UPCitemdb fallback failed %r: %s", query, exc)
+                items = []
+            scored = (
+                v7._score_items(items, query, hint, state, forced_mode=mode)
+                if items else []
+            )
+            for _, code, resolved_mode, _ in sorted(scored, key=lambda row: row[0], reverse=True):
+                if code in accepted:
+                    continue
+                accepted.append(code)
+                modes[code] = resolved_mode or mode
+                if (resolved_mode or mode) == "unit" and amazon_pack > 1:
+                    pack_units[code] = amazon_pack
+            if accepted:
+                if "UPCitemdb" not in sources:
+                    sources.append("UPCitemdb")
+                break
 
     entry = dict(cached)
     entry.update({
