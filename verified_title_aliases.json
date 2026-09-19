@@ -82,5 +82,17 @@
     "package_eans": [],
     "units_per_pack": 4,
     "note": "Elmex Dentifricio Anticarie 4-pack: sellable-unit EAN already verified by live resolver regression"
+  },
+  {
+    "contains": [
+      "wc net",
+      "sturascarichi",
+      "5 azioni"
+    ],
+    "eans": [
+      "8004050036486"
+    ],
+    "units_per_pack": 1,
+    "note": "WC Net Professional Sturascarichi 5 Azioni in 1, 1000 ml; GTIN verified on dm Italia and Bolton technical sheet"
   }
 ]

@@ -23,7 +23,7 @@ v3 = v14.v3
 v2 = v14.v2
 base = v14.base
 
-RESOLVER_VERSION = 13
+RESOLVER_VERSION = 14
 TITLE_ALIASES_FILE = Path("verified_title_aliases.json")
 
 
@@ -87,43 +87,83 @@ def _contextual_codes(raw: str, query: str) -> list[tuple[str, float]]:
     return sorted(found.items(), key=lambda item: item[1], reverse=True)
 
 
+def _dm_query_variants(query: str) -> list[str]:
+    """Create progressively shorter catalogue queries without using Via Veneto text."""
+    q = re.sub(r"\s+", " ", query or "").strip(" -,:;")
+    if not q:
+        return []
+
+    variants = [q]
+    before_comma = q.split(",", 1)[0].strip(" -,:;")
+    if before_comma and before_comma.casefold() != q.casefold():
+        variants.append(before_comma)
+
+    # Retail titles can be extremely verbose. Keep brand/core identity terms while
+    # dropping generic promotional/category prose, then validate every returned code
+    # against the ORIGINAL full title score before accepting it.
+    stop = {
+        "professional", "professionale", "azioni", "azione", "disgorgante", "detergente",
+        "prodotto", "formula", "agenti", "scarichi", "scarico", "per", "con", "senza",
+        "della", "delle", "degli", "dello", "dell", "alla", "alle", "agli", "allo",
+        "in", "da", "di", "del", "dei", "il", "la", "lo", "le", "gli", "un", "una",
+    }
+    tokens = re.findall(r"[A-Za-zÀ-ÿ0-9]+", q)
+    compact_tokens = []
+    for idx, token in enumerate(tokens):
+        low = token.casefold()
+        # Always retain the opening brand tokens; afterwards omit generic prose.
+        if idx < 2 or (len(low) >= 3 and low not in stop and not low.isdigit()):
+            compact_tokens.append(token)
+        if len(compact_tokens) >= 7:
+            break
+    compact = " ".join(compact_tokens).strip()
+    if compact and compact.casefold() not in {x.casefold() for x in variants}:
+        variants.append(compact)
+
+    return variants[:3]
+
+
 async def dm_any_eans(query: str) -> tuple[list[str], list[str]]:
     """Return externally verified EANs from dm without consulting Via Veneto."""
     if not query:
         return [], []
-    try:
-        response = await base.http.get(
-            v12.DM_SEARCH_URL,
-            params={"query": query},
-            headers={"Accept": "application/json", **v2.SEARCH_HEADERS},
-            timeout=12,
-        )
-        if not response.is_success:
-            return [], []
-        payload = response.json()
-    except Exception as exc:
-        base.LOG.debug("dm unrestricted lookup failed %r: %s", query, exc)
-        return [], []
 
     scored: list[tuple[float, str]] = []
-    for row in v12._walk_rows(payload):
-        codes = v12._codes_from_row(row)
-        if not codes:
+    for dm_query in _dm_query_variants(query):
+        try:
+            response = await base.http.get(
+                v12.DM_SEARCH_URL,
+                params={"query": dm_query},
+                headers={"Accept": "application/json", **v2.SEARCH_HEADERS},
+                timeout=12,
+            )
+            if not response.is_success:
+                continue
+            payload = response.json()
+        except Exception as exc:
+            base.LOG.debug("dm unrestricted lookup failed %r: %s", dm_query, exc)
             continue
-        external_text = v12._dict_text(row)
-        score = v6._title_score(query, external_text)
-        if score < 5.0:
-            continue
-        for code in codes:
-            if base.valid_gtin(code):
-                scored.append((score, code))
+
+        for row in v12._walk_rows(payload):
+            codes = v12._codes_from_row(row)
+            if not codes:
+                continue
+            external_text = v12._dict_text(row)
+            # Score against the original title, not the shortened search phrase.
+            score = v6._title_score(query, external_text)
+            if score < 5.0:
+                continue
+            for code in codes:
+                if base.valid_gtin(code):
+                    scored.append((score, code))
+        if scored:
+            break
 
     scored.sort(key=lambda x: x[0], reverse=True)
     if not scored:
         return [], []
 
     best = scored[0][0]
-    # Keep only candidates close to the best external-title match.
     accepted: list[str] = []
     for score, code in scored:
         if score + 1.5 < best:

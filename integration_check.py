@@ -225,6 +225,11 @@ async def main():
             ["palmolive", "effetto seta", "350"],
             {"8718951576971"},
         )
+        await assert_today_product(
+            "WCNET_STURASCARICHI",
+            ["wc net", "sturascarichi", "5 azioni"],
+            {"8004050036486"},
+        )
 
         # Regression for CTA links embedded on a product line inside a multi-offer
         # Telegram post. Fashion offers after Palmolive must not inherit Palmolive's
