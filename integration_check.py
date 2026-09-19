@@ -263,7 +263,7 @@ async def main():
 
         dove_message, dove_url = find_offer(messages, "B0D6ZJ276V")
         if dove_message:
-            dove = await app_v15.v11.resolve_offer(dove_message, dove_url, state, cache, aliases)
+            dove = await app_v15.resolve_offer(dove_message, dove_url, state, cache, aliases)
             if not dove or dove.get("status") != "matched" or dove.get("ean") != "8720181460043":
                 raise RuntimeError(f"Regressione Dove: {dove}")
             print(f"DOVE_RESOLVE=OK ean={dove['ean']} total={dove['amazon_total']:.2f} unit={dove['amazon_unit']:.2f}")
@@ -282,7 +282,7 @@ async def main():
         print(f"ELMEX_UNIT_QUERY={app_v15.v8.unit_query(elmex_hint)}")
 
         elmex = await asyncio.wait_for(
-            app_v15.v11.resolve_offer(elmex_message, elmex_url, state, cache, aliases), timeout=180
+            app_v15.resolve_offer(elmex_message, elmex_url, state, cache, aliases), timeout=180
         )
         print(f"ELMEX_RESOLVE={elmex}")
 
