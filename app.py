@@ -193,6 +193,36 @@ def asin_from_url(url: str) -> str:
 
 
 def extract_offer_price(text: str) -> float | None:
+    text = text or ""
+
+    # Prefer an explicit price transition over isolated euro amounts. Deal posts
+    # often mention a supermarket/unit price before the actual bundle total, e.g.
+    # "singolo 5,59€ ... solo 2,69€ ... PASSA DA 22,75€ A 10,22€".
+    # The final price in "passa da X a Y" is the payable offer total.
+    transition_patterns = [
+        re.compile(
+            r"passa\s+da\s*(?:€\s*)?(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:€|eur\b)?"
+            r"\s*(?:a|→|->)\s*(?:€\s*)?(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:€|eur\b)?",
+            re.I,
+        ),
+        re.compile(
+            r"(?:da|prima)\s*(?:€\s*)?(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:€|eur\b)"
+            r"\s*(?:a|ora)\s*(?:€\s*)?(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:€|eur\b)",
+            re.I,
+        ),
+    ]
+    for pattern in transition_patterns:
+        matches = list(pattern.finditer(text))
+        if not matches:
+            continue
+        for match in reversed(matches):
+            try:
+                value = float(match.group(2).replace(",", "."))
+            except ValueError:
+                continue
+            if 0.05 <= value <= 5000:
+                return value
+
     candidates: list[tuple[float, int, str]] = []
     patterns = [
         re.compile(r"€\s*(\d{1,4}(?:[.,]\d{1,2})?)", re.I),

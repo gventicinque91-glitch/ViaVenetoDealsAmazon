@@ -300,6 +300,10 @@ async def main():
             raise RuntimeError(f"Elmex EAN inatteso: {elmex.get('ean')}")
         if int(elmex.get("units") or 0) != 4:
             raise RuntimeError(f"Elmex multipack non normalizzato a 4 unità: {elmex.get('units')}")
+        if abs(float(elmex.get("amazon_total") or 0) - 10.22) > 0.001:
+            raise RuntimeError(f"Elmex totale Amazon errato: {elmex.get('amazon_total')} (atteso 10.22)")
+        if abs(float(elmex.get("amazon_unit") or 0) - 2.555) > 0.001:
+            raise RuntimeError(f"Elmex prezzo unitario errato: {elmex.get('amazon_unit')} (atteso 2.555)")
         if not str(elmex.get("identifier_source") or "").startswith("nome→EAN"):
             raise RuntimeError(f"Elmex non risolto tramite nome→EAN: {elmex.get('identifier_source')}")
         print(f"ELMEX_MATCH_OK ean={elmex['ean']} total={elmex['amazon_total']:.2f} unit={elmex['amazon_unit']:.4f} source={elmex['identifier_source']}")
