@@ -14,8 +14,23 @@ base = v4.base
 
 
 def _is_cta_line(value: str) -> bool:
-    low = (value or "").casefold()
-    return any(token in low for token in ("amazon", "apri", "guarda", "offerta", "vai al", "acquista"))
+    """True only for an action/link line, not for product prose mentioning Amazon.
+
+    Deal descriptions often contain phrases such as "QUI SU AMAZON SOLO 2,69€".
+    Treating every line containing "amazon" or "offerta" as a CTA used to cut the
+    actual product title out of the resolver context.
+    """
+    raw = (value or "").strip()
+    low = raw.casefold()
+    if not low:
+        return False
+    if any(token in low for token in ("apri", "guarda", "vai al", "acquista", "clicca")):
+        return True
+    # Short standalone "offerta/link Amazon" labels are CTA-like; long commercial
+    # sentences mentioning Amazon are product content and must stay in the block.
+    if len(raw) <= 55 and "amazon" in low and any(token in low for token in ("link", "offerta", "👉", "➡")):
+        return True
+    return False
 
 
 def _context_block_around(text_surrogate: str, start: int, end: int) -> str:
