@@ -38,7 +38,7 @@ def catalog_query(hint: str) -> str:
     # Stop before price/promo commentary.  This keeps brand/product/variant/size
     # while excluding prose that makes external barcode search unnecessarily noisy.
     value = re.sub(
-        r"\s+(?:al\s+supermercato|qui\s+su\s+amazon|sconto\s*\+?\s*coupon|"
+        r"\s*[🔴❗‼️💰🚨⚡🔥]*\s*(?:al\s+supermercato|qui\s+su\s+amazon|sconto\s*\+?\s*coupon|"
         r"passa\s+da|minimo\s+storico|offerta|coupon|venduto|spedito|"
         r"apri\s+su\s+amazon|apri\s+link\s+amazon).*$",
         "",
