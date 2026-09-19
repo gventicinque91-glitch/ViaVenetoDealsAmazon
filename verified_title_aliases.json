@@ -68,5 +68,19 @@
     ],
     "units_per_pack": 1,
     "note": "Palmolive Naturals Shampoo Effetto Seta / Silky Shine 350 ml; EAN verified on public Italian product catalogues"
+  },
+  {
+    "contains": [
+      "elmex",
+      "dentifricio",
+      "anticarie",
+      "4 x"
+    ],
+    "unit_eans": [
+      "8718951545632"
+    ],
+    "package_eans": [],
+    "units_per_pack": 4,
+    "note": "Elmex Dentifricio Anticarie 4-pack: sellable-unit EAN already verified by live resolver regression"
   }
 ]

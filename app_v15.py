@@ -23,7 +23,7 @@ v3 = v14.v3
 v2 = v14.v2
 base = v14.base
 
-RESOLVER_VERSION = 11
+RESOLVER_VERSION = 12
 TITLE_ALIASES_FILE = Path("verified_title_aliases.json")
 
 

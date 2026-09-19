@@ -21,18 +21,32 @@ def catalog_query(hint: str) -> str:
     better with brand + product + variant + size than with promotional prose.
     """
     value = hint or ""
+    # Remove invisible Telegram formatting chars before building a catalogue query.
+    value = re.sub(r"[\u200b-\u200f\u2060-\u206f\ufeff]", "", value)
     value = re.sub(r"\([^)]*(?:consegna|spedizione)[^)]*\)", " ", value, flags=re.I)
     value = re.sub(r"\s+-\s+\d{1,4}(?:[.,]\d{1,2})?\s*€.*$", "", value, flags=re.I)
     value = re.sub(r"\s+invece\s+di\s+.*$", "", value, flags=re.I)
-    value = re.sub(r"^[✅⭐🔥⚡🛒📌\s]+", "", value)
-    # Keep the extended commercial identity, including size/variant after commas.
-    # Cutting at the first comma loses decisive attributes such as "1,9 L".
+    value = re.sub(r"^[✅⭐🔥⚡🛒📌🚨❗‼️🔴💰\s]+", "", value)
+
+    # Channels often prepend marketing prose before a multipack title:
+    # "Tornaaa, sempre TOP RICHIESTO: 4 x Elmex ...".  The pack expression is a
+    # reliable start of the commercial identity, so discard a short preamble.
+    pack_anchor = re.search(r"\b\d{1,2}\s*[x×]\s+(?=[A-Za-zÀ-ÿ])", value, flags=re.I)
+    if pack_anchor and pack_anchor.start() <= 120:
+        value = value[pack_anchor.start():]
+
+    # Stop before price/promo commentary.  This keeps brand/product/variant/size
+    # while excluding prose that makes external barcode search unnecessarily noisy.
     value = re.sub(
-        r"\s+(?:minimo storico|offerta|coupon|venduto|spedito|apri su amazon|apri link amazon).*$",
+        r"\s+(?:al\s+supermercato|qui\s+su\s+amazon|sconto\s*\+?\s*coupon|"
+        r"passa\s+da|minimo\s+storico|offerta|coupon|venduto|spedito|"
+        r"apri\s+su\s+amazon|apri\s+link\s+amazon).*$",
         "",
         value,
         flags=re.I,
     )
+    # Keep the extended commercial identity, including size/variant after commas.
+    # Cutting at the first comma loses decisive attributes such as "1,9 L".
     value = re.sub(r"\s+", " ", value).strip(" -,:;")
     return value[:180]
 
